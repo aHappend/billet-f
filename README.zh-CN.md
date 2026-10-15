@@ -14,7 +14,7 @@
 |---|---|---|---|---|
 | 1 | [BILLET-F1](billet-f1/) | Programmable-coefficient FIR with explicit numerical and update rules | Engineering accepted | [PDF](billet-f1/REPORT.pdf) |
 | 2 | [BILLET-F2](billet-f2/) | Multichannel FIR, double-buffered coefficients and parallel MAC lanes | Engineering accepted | [PDF](billet-f2/REPORT.pdf) |
-| 3 | [BILLET-F3](billet-f3/) | Second-order-section IIR and configurable multistage FIR/IIR chains | Not accepted (designer) | Pending |
+| 3 | [BILLET-F3](billet-f3/) | Second-order-section IIR and configurable multistage FIR/IIR chains | Not accepted (verifier) | Pending |
 
 `Engineering accepted` 表示原生工程验收已通过；`Not accepted` 表示尚未验收；`Pending` 表示报告尚未发布。规划不算成果，后续代际不覆盖前代目录。
 
