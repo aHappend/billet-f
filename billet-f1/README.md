@@ -2,7 +2,7 @@
 
 Programmable-coefficient FIR with explicit numerical and update rules.
 
-**Status:** Not accepted (verifier).
+**Status:** Not accepted (checks).
 
 The independently reviewed product report has not been published yet.
 

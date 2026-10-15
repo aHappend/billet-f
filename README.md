@@ -13,7 +13,7 @@ This repository publishes selected open engineering deliverables produced with V
 
 | Generation | Design | Scope | Engineering status | Product report |
 |---|---|---|---|---|
-| 1 | [BILLET-F1](billet-f1/) | Programmable-coefficient FIR with explicit numerical and update rules | Not accepted (verifier) | Pending |
+| 1 | [BILLET-F1](billet-f1/) | Programmable-coefficient FIR with explicit numerical and update rules | Not accepted (checks) | Pending |
 | 2 | [BILLET-F2](billet-f2/) | Multichannel FIR, double-buffered coefficients and parallel MAC lanes | Not accepted (planned) | Pending |
 | 3 | [BILLET-F3](billet-f3/) | Second-order-section IIR and configurable multistage FIR/IIR chains | Not accepted (planned) | Pending |
 
