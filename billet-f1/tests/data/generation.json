@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "implementation": "tests/reference.py:bank_document",
+  "legal_taps": [1, 8, 16, 32, 64],
+  "families": {
+    "impulse": "ideal [1,0,...]; quantized [32767,0,...]",
+    "moving_average": "ideal 1/T per tap; ties-even Q1.15 with int16 clamp",
+    "triangular": "ideal (k+1)/(T*(T+1)/2); ties-even Q1.15 with int16 clamp",
+    "alternating_triangular": "ideal (-1)^k*(k+1)/(T*(T+1)/2); ties-even Q1.15 with int16 clamp",
+    "stress": "T=1: [-32768]; otherwise [32767,32767,0,...]"
+  },
+  "additional_directed_vectors": {
+    "ties": "coefficient [16384,0,...], samples [1,3,-1,-3]",
+    "adjacent": "coefficients [16383,0,...] and [16385,0,...], samples [1,3,-1,-3]",
+    "accumulator_extremes": "all coefficients -32768; at least T+2 samples -32768, then for T>1 at least T+2 samples 32767",
+    "random_bank": "Python random.Random(seed), T inclusive uniform integers in [-32768,32767] after directed cases; all actual committed banks and hashes published in each cell ledger"
+  },
+  "publication": "Every behavior run writes fully enumerated signed banks, ideal rationals and SHA256 hashes to coefficient_banks.json. Additional directed banks and all exact sample vectors are retained in each cell's vectors.txt."
+}

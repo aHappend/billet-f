@@ -1,0 +1,419 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=22mm,headheight=14pt]{geometry}
+
+\usepackage{longtable,booktabs,array,hyperref,xcolor,tikz,fancyhdr}
+
+\usepackage{fontspec,xeCJK}
+
+\setmainfont[Ligatures=TeXOff]{Times New Roman}
+
+\setsansfont[Ligatures=TeXOff]{Times New Roman}
+
+\setmonofont[Ligatures=TeXOff,WordSpace={1,1,1}]{Times New Roman}
+
+\setCJKmainfont{Noto Serif CJK SC}
+
+\setCJKsansfont{Noto Serif CJK SC}
+
+\setCJKmonofont{Noto Serif CJK SC}
+
+\newfontfamily\vulcanmathsymbols{Noto Serif CJK SC}
+
+\XeTeXgenerateactualtext=1
+
+\definecolor{vulcan}{HTML}{BB3E23}
+
+\pgfdeclarelayer{connections}\pgfdeclarelayer{edge labels}\pgfsetlayers{connections,main,edge labels}
+
+\hypersetup{hidelinks}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\setlength{\emergencystretch}{5em}\tolerance=2000\hbadness=10000
+
+\setlength{\parindent}{0pt}\setlength{\parskip}{5pt}
+
+\pagestyle{fancy}\fancyhf{}\fancyhead[L]{\small\sffamily VULCAN}
+
+\fancyhead[R]{\small Product design and verification}\fancyfoot[C]{\thepage}
+
+\begin{document}
+
+{\sffamily\huge\raggedright\textbf{BILLET-F1 Programmable-Coefficient FIR IP}\par}
+
+{\large Technical Design and Verification Report}\par
+
+16 October 2026 (\allowbreak{}UTC+\allowbreak{}8)\allowbreak{}\par\textcolor{vulcan}{\rule{\textwidth}{0.5pt}}
+
+\begin{abstract}
+
+BILLET-F1 is a synthesizable,\allowbreak{} single-clock streaming FIR filter for signed 16-bit Q1.15 samples and programmable coefficients. It supports 1,\allowbreak{} 8,\allowbreak{} 16,\allowbreak{} 32 and 64 taps,\allowbreak{} defaulting to 32. Full-width accumulation,\allowbreak{} round-to-nearest ties-to-even,\allowbreak{} output saturation and double-buffered coefficient commits provide deterministic numerical behavior without mixing coefficient generations.
+
+
+Independent Icarus simulation completed all 15 tap-count/\allowbreak{}seed combinations and checked 106,\allowbreak{}971 completed results with zero bit mismatches. Measured output-availability latency is T cycles and sustained always-ready initiation interval is T+\allowbreak{}1 cycles. Three separately executed RTL mutants produced numerical mismatches. Yosys structural and synthesis checks passed for all five legal configurations,\allowbreak{} and fresh-directory partial reproduction independently regenerated behavioral,\allowbreak{} defect and default-configuration synthesis results. These conclusions concern functional RTL and generic synthesis,\allowbreak{} not physical implementation.
+
+
+\end{abstract}
+
+\section{Architecture and design rationale}
+
+The architecture shares one signed 16-by-16 multiplier across T sequential multiply-accumulate cycles. Sample history shifts only on input acceptance; computations do not overlap. Two coefficient banks separate active filtering from staging writes,\allowbreak{} while a completeness bitmap prevents partial-bank activation. A single registered output slot provides backpressure retention. This organization favors simple resource sharing and explicit ownership over one-sample-per-cycle throughput. The final product-plus-accumulator sum passes through combinational rounding and saturation before being registered on the final MAC edge,\allowbreak{} avoiding an additional output stage. The four source modules and literal child instances are preserved under the top-level g\_\allowbreak{}supported generate branch. [\allowbreak{}E002,\allowbreak{} E004-E007]\allowbreak{}
+
+\begin{center}\begin{tikzpicture}[every node/.style={font=\small\sffamily},>=latex]
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b0) at (0.0,0.0) {B1: Streaming control};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b1) at (5.4,0.0) {B2: Coefficient banks};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b2) at (10.8,0.0) {B3: Sequential MAC};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b3) at (0.0,-4.6) {B4: Round and saturate};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b4) at (5.4,-4.6) {B5: Output slot};
+
+\begin{pgfonlayer}{connections}
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=-0.160cm]b0.east) -- (2.340,-0.160) -- (2.340,-3.470) -- coordinate[midway] (e0) (5.000,-3.470) -- ([xshift=-0.400cm]b1.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.000cm]b0.east) -- (2.420,0.000) -- (2.420,-3.210) -- coordinate[midway] (e1) (10.533,-3.210) -- ([xshift=-0.267cm]b2.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=-0.160cm]b2.east) -- (13.300,-0.160) -- (13.300,-2.950) -- coordinate[midway] (e2) (5.400,-2.950) -- ([xshift=0.000cm]b1.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=-0.107cm]b1.east) -- (7.980,-0.107) -- (7.980,-2.690) -- coordinate[midway] (e3) (11.067,-2.690) -- ([xshift=0.267cm]b2.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.107cm]b1.east) -- (8.060,0.107) -- (8.060,-2.430) -- coordinate[midway] (e4) (-0.480,-2.430) -- ([xshift=-0.480cm]b0.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.000cm]b2.east) -- (13.540,0.000) -- (13.540,-2.170) -- coordinate[midway] (e5) (-0.160,-2.170) -- ([xshift=-0.160cm]b0.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.160cm]b2.east) -- (13.620,0.160) -- (13.620,-1.910) -- coordinate[midway] (e6) (0.160,-1.910) -- ([xshift=0.160cm]b3.north);
+
+\draw[->,black!65] ([yshift=0.000cm]b3.east) -- coordinate[pos=0.25] (e7) ([yshift=0.000cm]b4.west);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.160cm]b0.east) -- (2.980,0.160) -- (2.980,-1.390) -- coordinate[midway] (e8) (5.800,-1.390) -- ([xshift=0.400cm]b4.north);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.000cm]b4.east) -- (8.460,-4.600) -- (8.460,-1.130) -- coordinate[midway] (e9) (0.480,-1.130) -- ([xshift=0.480cm]b0.south);
+
+\end{pgfonlayer}
+
+\begin{pgfonlayer}{edge labels}
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e0) {E1};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e1) {E2};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e2) {E3};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e3) {E4};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e4) {E5};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e5) {E6};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e6) {E7};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e7) {E8};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e8) {E9};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e9) {E10};
+
+\end{pgfonlayer}
+
+\end{tikzpicture}\end{center}
+
+{\small Functional block map, not a gate-level netlist. Edge identifiers match the directed relationships below. Crossings do not denote junctions; separate attachment points preserve arrow directions.}
+
+{\small\begin{longtable}{@{}L{0.24\textwidth}L{0.7\textwidth}@{}}\toprule
+
+\textbf{Block} & \textbf{Responsi\allowbreak{}bility}\\\midrule\endhead
+
+B1: Streamin\allowbreak{}g control & billet\_\allowbreak{}f1\_\allowbreak{}top arbitrat\allowbreak{}es input,\allowbreak{} configur\allowbreak{}ation and commit handshak\allowbreak{}es. It starts computat\allowbreak{}ions only when idle and output capacity is availabl\allowbreak{}e,\allowbreak{} and permits commits only after computat\allowbreak{}ion and output drainage.\\[3pt]
+
+B2: Coeffici\allowbreak{}ent banks & billet\_\allowbreak{}f1\_\allowbreak{}coeff\_\allowbreak{}bank,\allowbreak{} instanti\allowbreak{}ated as u\_\allowbreak{}coeff\_\allowbreak{}bank,\allowbreak{} owns two T-by-16 coeffici\allowbreak{}ent arrays,\allowbreak{} active-bank selectio\allowbreak{}n and the staging-written bitmap. It supplies the selected active coeffici\allowbreak{}ent asynchro\allowbreak{}nously.\\[3pt]
+
+B3: Sequenti\allowbreak{}al MAC & billet\_\allowbreak{}f1\_\allowbreak{}mac,\allowbreak{} instanti\allowbreak{}ated as u\_\allowbreak{}mac,\allowbreak{} owns shifted sample history,\allowbreak{} tap sequenci\allowbreak{}ng,\allowbreak{} busy state and full-width accumula\allowbreak{}tion. Tap zero addresse\allowbreak{}s the newest accepted sample.\\[3pt]
+
+B4: Round and saturate & billet\_\allowbreak{}f1\_\allowbreak{}round\_\allowbreak{}sat,\allowbreak{} instanti\allowbreak{}ated as u\_\allowbreak{}round\_\allowbreak{}sat,\allowbreak{} implemen\allowbreak{}ts signed ties-to-even division by 32768 followed by signed 16-bit saturati\allowbreak{}on. It contains no state.\\[3pt]
+
+B5: Output slot & Register\allowbreak{}s within billet\_\allowbreak{}f1\_\allowbreak{}top retain the complete\allowbreak{}d result and valid flag until transfer or reset. Invalid output data is explicit\allowbreak{}ly zero.\\[3pt]
+
+\bottomrule\end{longtable}}
+
+{\small\begin{longtable}{@{}L{0.24\textwidth}L{0.7\textwidth}@{}}\toprule
+
+\textbf{Directed relation\allowbreak{}ship} & \textbf{Meaning}\\\midrule\endhead
+
+E1: B1 to B2 & Accepted staging writes and atomic commit\\[3pt]
+
+E2: B1 to B3 & Accepted sample and start pulse\\[3pt]
+
+E3: B3 to B2 & Active coeffici\allowbreak{}ent read address\\[3pt]
+
+E4: B2 to B3 & Signed active coeffici\allowbreak{}ent\\[3pt]
+
+E5: B2 to B1 & Staging complete\allowbreak{}ness\\[3pt]
+
+E6: B3 to B1 & Busy and final-cycle status\\[3pt]
+
+E7: B3 to B4 & Full-width final sum\\[3pt]
+
+E8: B4 to B5 & Rounded and saturate\allowbreak{}d result\\[3pt]
+
+E9: B1 to B5 & Completi\allowbreak{}on capture and retireme\allowbreak{}nt control\\[3pt]
+
+E10: B5 to B1 & Pending-output occupanc\allowbreak{}y\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Interfaces and configuration}
+
+{\small\begin{longtable}{@{}L{0.2\textwidth}L{0.12\textwidth}L{0.1\textwidth}L{0.48\textwidth}@{}}\toprule
+
+\textbf{Signal /\allowbreak{} group} & \textbf{Directio\allowbreak{}n} & \textbf{Width} & \textbf{Contract}\\\midrule\endhead
+
+clk,\allowbreak{} rst\_\allowbreak{}n & Input & 1 bit each & Single rising-edge clock and asynchro\allowbreak{}nous active-low reset. Reset clears all state and forces every public output,\allowbreak{} includin\allowbreak{}g ready signals and m\_\allowbreak{}data,\allowbreak{} to zero.\\[3pt]
+
+s\_\allowbreak{}data; s\_\allowbreak{}valid /\allowbreak{} s\_\allowbreak{}ready & Input data and valid /\allowbreak{} output ready & Signed 16-bit data; 1-bit controls & A sample transfer\allowbreak{}s when s\_\allowbreak{}valid \&\& s\_\allowbreak{}ready immediat\allowbreak{}ely before a rising edge. The producer holds valid and data while stalled. s\_\allowbreak{}ready =\allowbreak{} rst\_\allowbreak{}n \&\& !busy \&\& (\allowbreak{}!m\_\allowbreak{}valid || m\_\allowbreak{}ready)\allowbreak{} \&\& !commit\_\allowbreak{}valid.\\[3pt]
+
+m\_\allowbreak{}data; m\_\allowbreak{}valid /\allowbreak{} m\_\allowbreak{}ready & Output data and valid /\allowbreak{} input ready & Signed 16-bit data; 1-bit controls & A result transfer\allowbreak{}s on m\_\allowbreak{}valid \&\& m\_\allowbreak{}ready. Valid stalled data remains bit-stable; m\_\allowbreak{}data is zero whenever m\_\allowbreak{}valid is zero. Output retireme\allowbreak{}nt may coincide with acceptan\allowbreak{}ce of the next sample.\\[3pt]
+
+cfg\_\allowbreak{}addr,\allowbreak{} cfg\_\allowbreak{}data; cfg\_\allowbreak{}valid /\allowbreak{} cfg\_\allowbreak{}ready & Input address,\allowbreak{} data and valid /\allowbreak{} output ready & ADDR\_\allowbreak{}W-bit unsigned address; signed 16-bit coeffici\allowbreak{}ent; 1-bit controls & Accepted writes modify only the inactive staging bank. Repeated writes are legal and the latest value wins. cfg\_\allowbreak{}ready =\allowbreak{} rst\_\allowbreak{}n \&\& !commit\_\allowbreak{}valid \&\& (\allowbreak{}cfg\_\allowbreak{}addr < TAP\_\allowbreak{}COUNT)\allowbreak{}. At T=\allowbreak{}1,\allowbreak{} address 1 is invalid and never accepted.\\[3pt]
+
+commit\_\allowbreak{}valid /\allowbreak{} commit\_\allowbreak{}ready & Input request /\allowbreak{} output ready & 1 bit each & A handshak\allowbreak{}e atomical\allowbreak{}ly swaps bank roles. commit\_\allowbreak{}ready =\allowbreak{} rst\_\allowbreak{}n \&\& staging\_\allowbreak{}complete \&\& !busy \&\& !m\_\allowbreak{}valid. Any asserted request blocks sample acceptan\allowbreak{}ce and configur\allowbreak{}ation writes,\allowbreak{} includin\allowbreak{}g when the requeste\allowbreak{}d commit is not yet ready.\\[3pt]
+
+\bottomrule\end{longtable}}
+
+{\small\begin{longtable}{@{}L{0.23\textwidth}L{0.12\textwidth}L{0.57\textwidth}@{}}\toprule
+
+\textbf{Paramete\allowbreak{}r} & \textbf{Default} & \textbf{Meaning /\allowbreak{} supporte\allowbreak{}d values}\\\midrule\endhead
+
+TAP\_\allowbreak{}COUNT & 32 & Only 1,\allowbreak{} 8,\allowbreak{} 16,\allowbreak{} 32 and 64 are legal. Unsuppor\allowbreak{}ted values produce an explicit PARAMETE\allowbreak{}R ERROR diagnost\allowbreak{}ic rather than selectin\allowbreak{}g a substitu\allowbreak{}te datapath.\\[3pt]
+
+ADDR\_\allowbreak{}W & 5 at TAP\_\allowbreak{}COUNT=\allowbreak{}32 & Derived local paramete\allowbreak{}r max(\allowbreak{}1,\allowbreak{} ceil(\allowbreak{}log2(\allowbreak{}TAP\_\allowbreak{}COUNT)\allowbreak{})\allowbreak{})\allowbreak{}; not independ\allowbreak{}ently configur\allowbreak{}able.\\[3pt]
+
+ACC\_\allowbreak{}W & 37 at TAP\_\allowbreak{}COUNT=\allowbreak{}32 & Derived local paramete\allowbreak{}r 32+\allowbreak{}ceil(\allowbreak{}log2(\allowbreak{}TAP\_\allowbreak{}COUNT)\allowbreak{})\allowbreak{}; widths are 32,\allowbreak{} 35,\allowbreak{} 36,\allowbreak{} 37 and 38 bits for the supporte\allowbreak{}d tap counts.\\[3pt]
+
+Numerica\allowbreak{}l formats & Signed 16-bit Q1.15 & Samples,\allowbreak{} coeffici\allowbreak{}ents and outputs have fixed widths. Products are signed 32 bits; intermed\allowbreak{}iate sums retain full accumula\allowbreak{}tor precisio\allowbreak{}n.\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Behavior and corner cases}
+
+\subsection{Convolution and numerical transformation}
+
+For accepted sample n,\allowbreak{} A[\allowbreak{}n]\allowbreak{} =\allowbreak{} sum over k=\allowbreak{}0 through T-1 of signed(\allowbreak{}x[\allowbreak{}n-k]\allowbreak{})\allowbreak{}*\allowbreak{}signed(\allowbreak{}c[\allowbreak{}k]\allowbreak{})\allowbreak{},\allowbreak{} with absent history zero. Set q=\allowbreak{}floor(\allowbreak{}A/\allowbreak{}32768)\allowbreak{} and r=\allowbreak{}A-32768*\allowbreak{}q. Increment q if r>16384,\allowbreak{} or if r=\allowbreak{}16384 and q is odd; then clamp to [\allowbreak{}-32768,\allowbreak{}32767]\allowbreak{}. This handles both signs symmetrically: accumulators -16384 and -49152 round to 0 and -2. An extended quotient prevents rounding overflow. In normalized units X=\allowbreak{}x/\allowbreak{}32768 and C=\allowbreak{}c/\allowbreak{}32768,\allowbreak{} the unclipped convolution is A/\allowbreak{}2\textasciicircum{}30. [\allowbreak{}E003,\allowbreak{} E005,\allowbreak{} E006]\allowbreak{}
+
+\subsection{Exact cycle schedule}
+
+A handshake at E0 inserts the sample and starts computation. Edges E1 through E\_\allowbreak{}T process taps 0 through T-1. Immediately after E\_\allowbreak{}T the result is valid; its earliest transfer is E\_\allowbreak{}(\allowbreak{}T+\allowbreak{}1)\allowbreak{},\allowbreak{} which may also accept the next sample. Thus availability latency is T cycles and earliest transfer latency and no-stall initiation interval are T+\allowbreak{}1 cycles. For T=\allowbreak{}1,\allowbreak{} acceptance,\allowbreak{} availability and retirement occur at E0,\allowbreak{} E1 and E2 respectively. Bubbles never shift history. [\allowbreak{}E002,\allowbreak{} E003,\allowbreak{} E007]\allowbreak{}
+
+\subsection{Atomic coefficient replacement}
+
+Every staging address must have been written since reset or the preceding commit. A successful commit swaps bank ownership and clears completeness,\allowbreak{} requiring a complete rewrite for the next transaction. History is preserved. Writes may proceed during computation or output stalls without affecting active coefficients. A pending output must retire before a commit can handshake; retirement and commit cannot occur on the same edge. Withdraw an incomplete commit request before resuming programming,\allowbreak{} and deassert a successful request before subsequent sample acceptance. [\allowbreak{}E003,\allowbreak{} E004,\allowbreak{} E007]\allowbreak{}
+
+\subsection{Reset and output ownership}
+
+Reset clears history,\allowbreak{} both banks,\allowbreak{} completeness,\allowbreak{} bank selection,\allowbreak{} accumulator,\allowbreak{} sequencing and output state. It aborts in-flight computation and unconsumed output; no pre-reset result may reappear. Filtering with the reset-zero active bank is legal before programming. Backpressure retains the output and blocks new samples until retirement is possible. Completion capture has priority over ordinary retirement,\allowbreak{} with the non-overlapped schedule preventing overwrite of an older result. [\allowbreak{}E003-E007]\allowbreak{}
+
+\section{Verification methods and measured results}
+
+\subsection{Independent bit-exact comparison across the supported matrix}
+
+\textbf{Method.} Real Icarus simulations exercised T=\allowbreak{}1/\allowbreak{}8/\allowbreak{}16/\allowbreak{}32/\allowbreak{}64 with seeds 17/\allowbreak{}89/\allowbreak{}203. Arbitrary-precision Python convolution maintained accepted-sample history and committed coefficient arrays independently of RTL tap scheduling. Public outputs were compared at four observation phases with active X/\allowbreak{}Z rejection.
+
+\textbf{Result.} All 15 cells passed with zero bit mismatches. Completed comparisons per seed were 5,\allowbreak{}737,\allowbreak{} 6,\allowbreak{}160,\allowbreak{} 6,\allowbreak{}640,\allowbreak{} 7,\allowbreak{}600 and 9,\allowbreak{}520 for increasing T,\allowbreak{} totaling 106,\allowbreak{}971. There were 106,\allowbreak{}998 accepted inputs,\allowbreak{} 106,\allowbreak{}956 output transfers and 42 explicitly reset-aborted transactions. Completed results include 15 subsequently discarded while pending at reset; these counts are not additional transfers. The complete per-cell ledger is evidence/\allowbreak{}behavior/\allowbreak{}20261015T204441Z-43b5ae60/\allowbreak{}ledger.json.
+
+{\small Evidence: E008,\allowbreak{} E009,\allowbreak{} E012,\allowbreak{} E013,\allowbreak{} E014,\allowbreak{} E019}
+
+\subsection{Streaming,\allowbreak{} update,\allowbreak{} reset and numerical-boundary coverage}
+
+\textbf{Method.} Directed impulses,\allowbreak{} DC,\allowbreak{} extremes,\allowbreak{} ties and adjacent remainders were combined with random traffic,\allowbreak{} asynchronous reset pulses,\allowbreak{} programming interactions and output stalls. Coverage was admitted only after public-trace comparison.
+
+\textbf{Result.} Every cell contained 1,\allowbreak{}200 full-range random samples and 17 commits,\allowbreak{} exceeding the respective 1,\allowbreak{}024 and eight minima. Input-bubble counts ranged from 253 to 1,\allowbreak{}150 and valid-output stalled cycles from 339 to 586,\allowbreak{} exceeding 64 each; every cell included a 70-cycle contiguous stall. All four sign/\allowbreak{}floor-parity tie classes and remainders 16383/\allowbreak{}16385 were exercised. Both saturation directions were exercised for T>1; singleton negative saturation is unreachable. Reset,\allowbreak{} history retention,\allowbreak{} staging overwrites and retirement/\allowbreak{}next-accept coincidence passed.
+
+{\small Evidence: E008,\allowbreak{} E019}
+
+\subsection{Measured cycle latency and throughput}
+
+\textbf{Method.} Each cell recorded 72 consecutive always-ready outputs with separate acceptance,\allowbreak{} availability and transfer edges.
+
+\textbf{Result.} Measured availability/\allowbreak{}transfer/\allowbreak{}initiation-interval triples were 1/\allowbreak{}2/\allowbreak{}2,\allowbreak{} 8/\allowbreak{}9/\allowbreak{}9,\allowbreak{} 16/\allowbreak{}17/\allowbreak{}17,\allowbreak{} 32/\allowbreak{}33/\allowbreak{}33 and 64/\allowbreak{}65/\allowbreak{}65 cycles. Total simulated cycles for seeds 17/\allowbreak{}89/\allowbreak{}203 respectively were: T1 12750/\allowbreak{}12847/\allowbreak{}12750; T8 56118/\allowbreak{}56122/\allowbreak{}56073; T16 113632/\allowbreak{}113652/\allowbreak{}113680; T32 251833/\allowbreak{}251814/\allowbreak{}251857; T64 620347/\allowbreak{}620356/\allowbreak{}620356.
+
+{\small Evidence: E019}
+
+\subsection{Floating-reference accuracy and clipping separation}
+
+\textbf{Method.} Independent math.fsum convolution used normalized samples and quantized coefficients. Error against saturated floating convolution was separated from clipping-only error and total error against unclipped convolution.
+
+\textbf{Result.} Every cell's maximum absolute error against saturated floating convolution was 1.52587890625e-5,\allowbreak{} exactly half a Q1.15 code,\allowbreak{} within the specified additional 1e-12 tolerance. At T32/\allowbreak{}seed17,\allowbreak{} normalized MAE was 5.7364784573e-6 and RMSE 7.7779393805e-6,\allowbreak{} with 834 clipped outputs. Its clipping-only maximum was 31.000030517578125,\allowbreak{} demonstrating why overload error is reported separately from quantization accuracy. Per-cell and per-tone metrics are retained in the behavioral ledger.
+
+{\small Evidence: E008,\allowbreak{} E012,\allowbreak{} E019}
+
+\subsection{Published coefficient banks and frequency-response characterization}
+
+\textbf{Method.} Five bank families were enumerated and hashed for every legal T. Moving-average and asymmetric triangular banks each received 512 steady-state scored samples at normalized frequencies 1/\allowbreak{}64,\allowbreak{} 3/\allowbreak{}64,\allowbreak{} 7/\allowbreak{}64 and 15/\allowbreak{}64 after warmup. Floating complex response was compared with analytical response.
+
+\textbf{Result.} The response ledger contains 100 bank/\allowbreak{}configuration/\allowbreak{}frequency records; maximum floating-versus-analytical disagreement was approximately 1.645e-14,\allowbreak{} below 1e-10. coefficient\_\allowbreak{}banks.json retains every signed coefficient,\allowbreak{} ideal rational value and SHA-256 hash. frequency\_\allowbreak{}response.json reports complex responses and ideal-versus-quantized error bounded by sum(\allowbreak{}abs(\allowbreak{}ideal[\allowbreak{}k]\allowbreak{}-code[\allowbreak{}k]\allowbreak{}/\allowbreak{}32768)\allowbreak{})\allowbreak{}. Per-cycle stimulus and reference\_\allowbreak{}outputs.jsonl retain reproducible traces rather than only summary metrics.
+
+{\small Evidence: E008,\allowbreak{} E010,\allowbreak{} E012,\allowbreak{} E019}
+
+\subsection{Explicit illegal-parameter rejection}
+
+\textbf{Method.} Separate executable negative configurations tested TAP\_\allowbreak{}COUNT 0,\allowbreak{} 2,\allowbreak{} 3 and 65; singleton traffic also tested invalid coefficient address 1.
+
+\textbf{Result.} All four unsupported counts were explicitly rejected. Singleton address 1 remained unaccepted,\allowbreak{} while legal singleton timing and programming passed.
+
+{\small Evidence: E003,\allowbreak{} E007,\allowbreak{} E019}
+
+\subsection{Sensitivity to material RTL defects}
+
+\textbf{Method.} Fresh RTL copies separately reversed tap order,\allowbreak{} replaced rounding with truncation and allowed staging writes to corrupt active computation. Unchanged witnesses first passed accepted RTL,\allowbreak{} then each mutant compiled and executed against the same oracle.
+
+\textbf{Result.} All three mutants were killed by observed output mismatches,\allowbreak{} not compiler failures or timeouts. Reversed ordering produced 6667 instead of 833; truncation produced 1 instead of 2; coefficient corruption produced -1875 instead of 20625. Accepted RTL avoids these failures through newest-first indexing,\allowbreak{} explicit remainder/\allowbreak{}parity rounding and inactive-bank-only writes with drain-before-commit arbitration. Mutated sources,\allowbreak{} patches,\allowbreak{} witnesses and first mismatches are retained; accepted source hashes were rechecked.
+
+{\small Evidence: E005,\allowbreak{} E006,\allowbreak{} E004,\allowbreak{} E014,\allowbreak{} E020}
+
+\subsection{Synthesizability,\allowbreak{} hierarchy,\allowbreak{} connectivity and latch absence}
+
+\textbf{Method.} Yosys synthesized all five legal configurations,\allowbreak{} checked literal hierarchy before mapping,\allowbreak{} traversed datapath connectivity and asserted structural consistency before and after synthesis.
+
+\textbf{Result.} All five passed with zero inferred latches and no unresolved black boxes. Each retained one signed multiplier,\allowbreak{} full-width accumulation and paths from all 16 sample/\allowbreak{}configuration data bits to the output datapath. At default T32,\allowbreak{} coefficient-bank/\allowbreak{}MAC/\allowbreak{}rounding/\allowbreak{}top module statistics were respectively 3531/\allowbreak{}4065/\allowbreak{}153/\allowbreak{}67 generic cells,\allowbreak{} 1057/\allowbreak{}555/\allowbreak{}0/\allowbreak{}17 state bits and 3561/\allowbreak{}4174/\allowbreak{}281/\allowbreak{}184 wire bits. These are hierarchical generic statistics,\allowbreak{} not physical area. The four RTL modules contain 45/\allowbreak{}56/\allowbreak{}32/\allowbreak{}102 lines,\allowbreak{} totaling 235.
+
+{\small Evidence: E004,\allowbreak{} E005,\allowbreak{} E006,\allowbreak{} E007,\allowbreak{} E021}
+
+\subsection{Portable fresh-source reproduction}
+
+\textbf{Method.} Declared sources and fixtures were copied to a fresh directory,\allowbreak{} followed by new T1/\allowbreak{}T32 seed-17 partial behavior,\allowbreak{} all defect witnesses and default-T synthesis using fresh binaries and netlists.
+
+\textbf{Result.} Both partial behavioral cells passed with 3,\allowbreak{}193 completed comparisons and zero mismatches. All three mutants again produced numerical mismatches and default-T synthesis passed. Copied-source hashes,\allowbreak{} relative commands and outcomes are retained under evidence/\allowbreak{}reproduce/\allowbreak{}20261015T204848Z-cddb0c06. This subset is separate from,\allowbreak{} and does not enlarge or replace,\allowbreak{} the full 15-cell matrix.
+
+{\small Evidence: E001,\allowbreak{} E008,\allowbreak{} E014,\allowbreak{} E022}
+
+\section{Integration and use}
+
+Compile all four rtl/\allowbreak{}*\allowbreak{}.sv files with billet\_\allowbreak{}f1\_\allowbreak{}top as the top-level module. Connect every port in one clock domain and select only a supported TAP\_\allowbreak{}COUNT. Consult design/\allowbreak{}SPEC.md for the public contract and design/\allowbreak{}ARCHITECTURE.md for internal ownership.
+
+
+Assert rst\_\allowbreak{}n low before use. After release,\allowbreak{} write every staging coefficient through cfg\_\allowbreak{}valid/\allowbreak{}cfg\_\allowbreak{}ready,\allowbreak{} then hold commit\_\allowbreak{}valid until its handshake and deassert it. Never attempt to finish an incomplete bank while holding commit\_\allowbreak{}valid. Preserve producer payloads while stalled and accommodate T+\allowbreak{}1-cycle no-stall sample spacing.
+
+
+Required external executables are Python 3,\allowbreak{} iverilog with SystemVerilog-2012 support,\allowbreak{} vvp and Yosys. Python references use only the standard library. Run all commands from the delivered project root; generated invocations create distinct retained result directories.
+
+
+Full behavior: \texttt{python3 tests/\allowbreak{}verify.py behavior --taps 1,\allowbreak{}8,\allowbreak{}16,\allowbreak{}32,\allowbreak{}64 --seeds 17,\allowbreak{}89,\allowbreak{}203 --out evidence/\allowbreak{}behavior}
+
+
+Defect sensitivity: \texttt{python3 tests/\allowbreak{}verify.py defects --out evidence/\allowbreak{}defects}
+
+
+Generic synthesis: \texttt{python3 tests/\allowbreak{}verify.py synthesis --taps 1,\allowbreak{}8,\allowbreak{}16,\allowbreak{}32,\allowbreak{}64 --out evidence/\allowbreak{}synthesis}
+
+
+Partial clean-directory reproduction: \texttt{python3 tests/\allowbreak{}verify.py reproduce --out evidence/\allowbreak{}reproduce}
+
+
+Use each generated result.json,\allowbreak{} ledger.json and claim\_\allowbreak{}to\_\allowbreak{}evidence.json to navigate outcomes,\allowbreak{} inventories and raw receipts. Bank generation uses ties-to-even quantization and signed clamping: moving average is 32768/\allowbreak{}T for T>1,\allowbreak{} triangular ideals are (\allowbreak{}k+\allowbreak{}1)\allowbreak{}/\allowbreak{}(\allowbreak{}T*\allowbreak{}(\allowbreak{}T+\allowbreak{}1)\allowbreak{}/\allowbreak{}2)\allowbreak{},\allowbreak{} and alternating triangular applies (\allowbreak{}-1)\allowbreak{}\textasciicircum{}k. The impulse bank starts with 32767; stress banks and additional boundary vectors are retained with their exact codes.
+
+
+\section{Limitations and acceptance boundary}
+
+The evidence establishes bounded simulation and generic synthesis,\allowbreak{} not exhaustive formal correctness. Only the five listed tap counts and fixed signed 16-bit formats are supported.
+
+
+Computations are non-overlapped. There is no input queue,\allowbreak{} one-sample-per-cycle mode or coefficient commit during an active computation or pending output. Holding an incomplete commit blocks programming until the request is withdrawn.
+
+
+Singleton negative saturation and a nonempty incomplete singleton staging bitmap are unreachable and are not claimed as exercised.
+
+
+Register arrays use asynchronous reads and reset. No SRAM or FPGA block-RAM inference,\allowbreak{} device-specific mapping,\allowbreak{} clock-frequency limit,\allowbreak{} physical area,\allowbreak{} timing closure,\allowbreak{} power result or board measurement is established.
+
+
+Integration must address target-specific reset release,\allowbreak{} clock quality and timing constraints. No clock-domain crossing mechanism,\allowbreak{} silicon-security claim or hardware characterization is included.
+
+
+Floating-response characterization describes the delivered coefficient banks and their analytical quantization bounds; it does not establish an application-specific passband,\allowbreak{} stopband or filter-quality target. Fresh-directory reproduction deliberately uses a reduced subset rather than repeating the full matrix.
+
+
+\appendix\section{Source inventory}
+
+Production inventory: 4 Verilog/\allowbreak{}SystemVerilog files; 216 nonblank,\allowbreak{} non-comment lines. Source size is not a correctness or quality metric.
+
+{\small\begin{longtable}{@{}L{0.61\textwidth}L{0.15\textwidth}L{0.15\textwidth}@{}}\toprule
+
+\textbf{Producti\allowbreak{}on file} & \textbf{Physical lines} & \textbf{Code lines}\\\midrule\endhead
+
+rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}coeff\_\allowbreak{}bank.sv & 45 & 41\\[3pt]
+
+rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}mac.sv & 56 & 52\\[3pt]
+
+rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}round\_\allowbreak{}sat.sv & 32 & 28\\[3pt]
+
+rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}top.sv & 102 & 95\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Verification record index}
+
+{\small\begin{longtable}{@{}L{0.57\textwidth}L{0.16\textwidth}L{0.17\textwidth}@{}}\toprule
+
+\textbf{Recorded check} & \textbf{Outcome} & \textbf{Executio\allowbreak{}n time (\allowbreak{}s)\allowbreak{}}\\\midrule\endhead
+
+behavior & passed & 209.317\\[3pt]
+
+defect\_\allowbreak{}sensitiv\allowbreak{}ity & passed & 0.667\\[3pt]
+
+synthesi\allowbreak{}s & passed & 29.612\\[3pt]
+
+portable\_\allowbreak{}reproduc\allowbreak{}tion & passed & 16.725\\[3pt]
+
+\bottomrule\end{longtable}}
+
+Execution times include tool and provider waiting; they are not hardware latency or model utilization.
+
+{\small\begin{longtable}{@{}L{0.12\textwidth}L{0.82\textwidth}@{}}\toprule
+
+\textbf{Referenc\allowbreak{}e} & \textbf{Original project-relative record}\\\midrule\endhead
+
+E001 & README.md\\[3pt]
+
+E003 & design/\allowbreak{}SPEC.md\\[3pt]
+
+E004 & rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}coeff\_\allowbreak{}bank.sv\\[3pt]
+
+E005 & rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}mac.sv\\[3pt]
+
+E006 & rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}round\_\allowbreak{}sat.sv\\[3pt]
+
+E007 & rtl/\allowbreak{}billet\_\allowbreak{}f1\_\allowbreak{}top.sv\\[3pt]
+
+E008 & tests/\allowbreak{}METHOD.md\\[3pt]
+
+E009 & tests/\allowbreak{}bridge.sv\\[3pt]
+
+E010 & tests/\allowbreak{}data/\allowbreak{}generati\allowbreak{}on.json\\[3pt]
+
+E012 & tests/\allowbreak{}referenc\allowbreak{}e.py\\[3pt]
+
+E013 & tests/\allowbreak{}scenario\allowbreak{}s.py\\[3pt]
+
+E014 & tests/\allowbreak{}verify.py\\[3pt]
+
+E019 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0003/\allowbreak{}stdout.log\\[3pt]
+
+E020 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0004/\allowbreak{}stdout.log\\[3pt]
+
+E021 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0005/\allowbreak{}stdout.log\\[3pt]
+
+E022 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0006/\allowbreak{}stdout.log\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Document provenance}
+
+Engineering was independently accepted for the recorded source and evidence identity. This is not exhaustive proof, hardware deployment or physical signoff. The companion REPORT.md records the exact report approval and source manifest, and links the English/Chinese journeys containing original failures and interventions. A report number identifies a generation attempt, not a new hardware revision.
+
+No developer attribution was supplied; none has been inferred.
+
+\end{document}

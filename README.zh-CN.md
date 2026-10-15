@@ -12,13 +12,13 @@
 
 | Generation | Design | Scope | Engineering status | Product report |
 |---|---|---|---|---|
-| 1 | [BILLET-F1](billet-f1/) | Programmable-coefficient FIR with explicit numerical and update rules | Not accepted (checks) | Pending |
-| 2 | [BILLET-F2](billet-f2/) | Multichannel FIR, double-buffered coefficients and parallel MAC lanes | Not accepted (planned) | Pending |
+| 1 | [BILLET-F1](billet-f1/) | Programmable-coefficient FIR with explicit numerical and update rules | Engineering accepted | [PDF](billet-f1/REPORT.pdf) |
+| 2 | [BILLET-F2](billet-f2/) | Multichannel FIR, double-buffered coefficients and parallel MAC lanes | Not accepted (verifier) | Pending |
 | 3 | [BILLET-F3](billet-f3/) | Second-order-section IIR and configurable multistage FIR/IIR chains | Not accepted (planned) | Pending |
 
 `Engineering accepted` 表示原生工程验收已通过；`Not accepted` 表示尚未验收；`Pending` 表示报告尚未发布。规划不算成果，后续代际不覆盖前代目录。
 
-验收后发布规格、RTL、可执行验证程序；报告在实际渲染产物获批后追加。各代目录含复现命令和精简检查状态，不发布账号、模型对话、私有经验、框架状态或内部原始日志。报告中的内部相对证据路径仅作溯源，相关内部文件不随公开包提供；用户可运行验证程序生成自己的证据。
+验收后发布规格、RTL、可执行验证程序；报告在实际渲染产物获批后追加。各代目录含复现命令和精简检查状态，不发布账号、模型对话、私有经验、框架状态或内部原始日志。已验收的产品 README 按原字节保留；存在原 README 时，生成的发布说明和复现命令另存于该代的 `DELIVERY.md`。报告中的内部相对证据路径仅作溯源，相关内部文件不随公开包提供；用户可运行验证程序生成自己的证据。
 
 当前结果不等于流片、实测 PPA、侧信道认证或板级实时性能。发布流程见 [PUBLISHING.md](PUBLISHING.md)。
 
