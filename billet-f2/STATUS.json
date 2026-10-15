@@ -1,7 +1,70 @@
 {
   "chip": "BILLET-F2",
-  "phase": "checks",
-  "engineering_accepted": false,
+  "phase": "completed",
+  "engineering_accepted": true,
   "report_published": false,
-  "checks": []
+  "checks": [
+    {
+      "check": "check:behavior",
+      "status": "passed"
+    },
+    {
+      "check": "check:f1_compatibility",
+      "status": "passed"
+    },
+    {
+      "check": "check:defect_sensitivity",
+      "status": "passed"
+    },
+    {
+      "check": "check:synthesis_and_parameter_diagnostics",
+      "status": "passed"
+    },
+    {
+      "check": "check:portable_reproduction",
+      "status": "passed"
+    }
+  ],
+  "reproduce": [
+    [
+      "python3",
+      "tests/verify.py",
+      "--suite",
+      "behavior",
+      "--output",
+      "evidence/behavior"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--suite",
+      "compatibility",
+      "--output",
+      "evidence/compatibility"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--suite",
+      "defects",
+      "--output",
+      "evidence/defects"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--suite",
+      "synthesis",
+      "--output",
+      "evidence/synthesis"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--suite",
+      "portability",
+      "--output",
+      "evidence/portability"
+    ]
+  ]
 }
