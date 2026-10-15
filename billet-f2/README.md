@@ -23,6 +23,6 @@ Use a clean checkout or fresh output directories when a driver refuses existing 
 
 [Specification](design/SPEC.md) · [Architecture](design/ARCHITECTURE.md) · [RTL](rtl/) · [Verification source](tests/) · [Recorded check statuses](STATUS.json)
 
-The independently reviewed product report has not been published yet.
+[Reviewed product report](REPORT.pdf) · [LaTeX source](REPORT.tex)
 
 Simulation and generic synthesis do not establish physical signoff or measured silicon performance.

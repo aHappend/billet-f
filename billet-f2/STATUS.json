@@ -2,7 +2,7 @@
   "chip": "BILLET-F2",
   "phase": "completed",
   "engineering_accepted": true,
-  "report_published": false,
+  "report_published": true,
   "checks": [
     {
       "check": "check:behavior",

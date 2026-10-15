@@ -23,6 +23,8 @@
   "billet-f1/tests/scenarios.py",
   "billet-f1/tests/verify.py",
   "billet-f2/README.md",
+  "billet-f2/REPORT.pdf",
+  "billet-f2/REPORT.tex",
   "billet-f2/STATUS.json",
   "billet-f2/billet_f1_reference/rtl/billet_f1_coeff_bank.sv",
   "billet-f2/billet_f1_reference/rtl/billet_f1_mac.sv",

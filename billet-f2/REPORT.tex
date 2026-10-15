@@ -1,0 +1,432 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=22mm,headheight=14pt]{geometry}
+
+\usepackage{longtable,booktabs,array,hyperref,xcolor,tikz,fancyhdr}
+
+\usepackage{fontspec,xeCJK}
+
+\setmainfont[Ligatures=TeXOff]{Times New Roman}
+
+\setsansfont[Ligatures=TeXOff]{Times New Roman}
+
+\setmonofont[Ligatures=TeXOff,WordSpace={1,1,1}]{Times New Roman}
+
+\setCJKmainfont{Noto Serif CJK SC}
+
+\setCJKsansfont{Noto Serif CJK SC}
+
+\setCJKmonofont{Noto Serif CJK SC}
+
+\newfontfamily\vulcanmathsymbols{Noto Serif CJK SC}
+
+\XeTeXgenerateactualtext=1
+
+\definecolor{vulcan}{HTML}{BB3E23}
+
+\pgfdeclarelayer{connections}\pgfdeclarelayer{edge labels}\pgfsetlayers{connections,main,edge labels}
+
+\hypersetup{hidelinks}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\setlength{\emergencystretch}{5em}\tolerance=2000\hbadness=10000
+
+\setlength{\parindent}{0pt}\setlength{\parskip}{5pt}
+
+\pagestyle{fancy}\fancyhf{}\fancyhead[L]{\small\sffamily VULCAN}
+
+\fancyhead[R]{\small Product design and verification}\fancyfoot[C]{\thepage}
+
+\begin{document}
+
+{\sffamily\huge\raggedright\textbf{BILLET-F2: Four-Channel Fixed-Point FIR RTL IP}\par}
+
+{\large Technical Design and Verification Report}\par
+
+16 October 2026 (\allowbreak{}UTC+\allowbreak{}8)\allowbreak{}\par\textcolor{vulcan}{\rule{\textwidth}{0.5pt}}
+
+\begin{abstract}
+
+BILLET-F2 implements four independently configured FIR channels around one shared,\allowbreak{} configurable parallel multiply-accumulate engine. It provides independent sample histories,\allowbreak{} per-channel double-buffered coefficients and atomic bank swaps,\allowbreak{} while preserving BILLET-F1 channel-zero numerical and cycle behavior with one MAC lane.
+
+
+The mandatory behavioral matrix covered all 15 legal parameter combinations at seeds 17,\allowbreak{} 89 and 233: 102,\allowbreak{}339 retired samples matched an independent integer convolution model with zero output-code error. Fifteen additional F1 compatibility runs compared 8,\allowbreak{}472 retirements with zero differences. Reset canceled 90 and 30 transactions respectively; these were accounted separately from compared outputs. Three semantic mutants were detected,\allowbreak{} and all 15 configurations passed generic synthesis and latch checks. These results establish simulated digital behavior and generic synthesizability,\allowbreak{} not physical performance. [\allowbreak{}E019–E022]\allowbreak{}
+
+
+\end{abstract}
+
+\section{Architecture and design rationale}
+
+The design uses one globally shared computation engine,\allowbreak{} no input queue and one output register. Separate histories and coefficient banks isolate channel state without duplicating the entire datapath. Each computation captures its channel and active-bank identity; global commit exclusion preserves that ownership through output retirement. This conservative policy retains F1 control semantics but prevents unrelated channels from committing while the engine or output is occupied. Parallel lanes process consecutive taps,\allowbreak{} with a balanced full-width reduction tree and combinational final rounding. The five synthesizable modules total 13,\allowbreak{}997 bytes and 368 source lines. [\allowbreak{}E001,\allowbreak{} E003–E007,\allowbreak{} E022]\allowbreak{}
+
+\begin{center}\begin{tikzpicture}[every node/.style={font=\small\sffamily},>=latex]
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b0) at (0.0,0.0) {B1: Handshake control};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b1) at (5.4,0.0) {B2: Coefficient banks};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b2) at (10.8,0.0) {B3: Channel histories};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b3) at (0.0,-4.6) {B4: Parallel MAC};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b4) at (5.4,-4.6) {B5: Round and saturate};
+
+\node[draw=vulcan,rounded corners,fill=vulcan!4,text width=3.8cm,minimum height=1cm,align=center] (b5) at (10.8,-4.6) {B6: Output register};
+
+\begin{pgfonlayer}{connections}
+
+\draw[->,black!65] ([yshift=-0.160cm]b0.east) -- coordinate[pos=0.25] (e0) ([yshift=0.000cm]b1.west);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.000cm]b0.east) -- (2.340,0.000) -- (2.340,-3.470) -- coordinate[midway] (e1) (10.400,-3.470) -- ([xshift=-0.400cm]b2.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.160cm]b0.east) -- (2.420,0.160) -- (2.420,-3.210) -- coordinate[midway] (e2) (-0.533,-3.210) -- ([xshift=-0.533cm]b3.north);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.000cm]b1.east) -- (7.900,0.000) -- (7.900,-2.950) -- coordinate[midway] (e3) (-0.267,-2.950) -- ([xshift=-0.267cm]b3.north);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=-0.213cm]b3.east) -- (2.580,-4.813) -- (2.580,-2.690) -- coordinate[midway] (e4) (5.400,-2.690) -- ([xshift=0.000cm]b1.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=-0.107cm]b3.east) -- (2.660,-4.707) -- (2.660,-2.430) -- coordinate[midway] (e5) (10.800,-2.430) -- ([xshift=0.000cm]b2.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.000cm]b2.east) -- (13.540,0.000) -- (13.540,-2.170) -- coordinate[midway] (e6) (0.000,-2.170) -- ([xshift=0.000cm]b3.north);
+
+\draw[->,black!65] ([yshift=0.000cm]b3.east) -- coordinate[pos=0.25] (e7) ([yshift=0.000cm]b4.west);
+
+\draw[->,black!65] ([yshift=0.000cm]b4.east) -- coordinate[pos=0.25] (e8) ([yshift=0.000cm]b5.west);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.107cm]b3.east) -- (2.980,-4.493) -- (2.980,-5.990) -- coordinate[midway] (e9) (11.200,-5.990) -- ([xshift=0.400cm]b5.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.213cm]b3.east) -- (3.060,-4.387) -- (3.060,-1.130) -- coordinate[midway] (e10) (0.267,-1.130) -- ([xshift=0.267cm]b0.south);
+
+\draw[->,black!65,rounded corners=2pt] ([yshift=0.000cm]b5.east) -- (13.940,-4.600) -- (13.940,-0.870) -- coordinate[midway] (e11) (0.533,-0.870) -- ([xshift=0.533cm]b0.south);
+
+\end{pgfonlayer}
+
+\begin{pgfonlayer}{edge labels}
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e0) {E1};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e1) {E2};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e2) {E3};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e3) {E4};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e4) {E5};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e5) {E6};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e6) {E7};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e7) {E8};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e8) {E9};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e9) {E10};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e10) {E11};
+
+\node[fill=white,inner sep=1pt,font=\scriptsize] at (e11) {E12};
+
+\end{pgfonlayer}
+
+\end{tikzpicture}\end{center}
+
+{\small Functional block map, not a gate-level netlist. Edge identifiers match the directed relationships below. Crossings do not denote junctions; separate attachment points preserve arrow directions.}
+
+{\small\begin{longtable}{@{}L{0.24\textwidth}L{0.7\textwidth}@{}}\toprule
+
+\textbf{Block} & \textbf{Responsi\allowbreak{}bility}\\\midrule\endhead
+
+B1: Handshak\allowbreak{}e control & Control logic in billet\_\allowbreak{}f2\_\allowbreak{}top determin\allowbreak{}es sample,\allowbreak{} configur\allowbreak{}ation and commit acceptan\allowbreak{}ce,\allowbreak{} enforces commit priority and excludes swaps during computat\allowbreak{}ion or valid output.\\[3pt]
+
+B2: Coeffici\allowbreak{}ent banks & billet\_\allowbreak{}f2\_\allowbreak{}coeff\_\allowbreak{}bank,\allowbreak{} instance u\_\allowbreak{}coeff\_\allowbreak{}bank,\allowbreak{} owns four independ\allowbreak{}ent bank pairs,\allowbreak{} active selector\allowbreak{}s and fresh-write masks. Parallel reads select the captured channel and bank.\\[3pt]
+
+B3: Channel historie\allowbreak{}s & billet\_\allowbreak{}f2\_\allowbreak{}history,\allowbreak{} instance u\_\allowbreak{}history,\allowbreak{} owns four delay lines. Only the accepted sample's channel shifts; tap zero becomes the newest sample.\\[3pt]
+
+B4: Parallel MAC & billet\_\allowbreak{}f2\_\allowbreak{}mac,\allowbreak{} instance u\_\allowbreak{}mac,\allowbreak{} captures ownershi\allowbreak{}p and tracks tap groups. Signed 16-by-16 products are extended before balanced reductio\allowbreak{}n and exact accumula\allowbreak{}tion.\\[3pt]
+
+B5: Round and saturate & billet\_\allowbreak{}f2\_\allowbreak{}round\_\allowbreak{}sat,\allowbreak{} instance u\_\allowbreak{}round\_\allowbreak{}sat,\allowbreak{} combinat\allowbreak{}ionally converts the exact final sum to signed Q1.15 using nearest-even rounding and saturati\allowbreak{}on.\\[3pt]
+
+B6: Output register & Register\allowbreak{}s in billet\_\allowbreak{}f2\_\allowbreak{}top capture the final result and channel,\allowbreak{} hold them under backpres\allowbreak{}sure and permit retireme\allowbreak{}nt alongsid\allowbreak{}e a replacem\allowbreak{}ent input.\\[3pt]
+
+\bottomrule\end{longtable}}
+
+{\small\begin{longtable}{@{}L{0.24\textwidth}L{0.7\textwidth}@{}}\toprule
+
+\textbf{Directed relation\allowbreak{}ship} & \textbf{Meaning}\\\midrule\endhead
+
+E1: B1 to B2 & Accepted coeffici\allowbreak{}ent writes and commits\\[3pt]
+
+E2: B1 to B3 & Accepted sample,\allowbreak{} channel and history push\\[3pt]
+
+E3: B1 to B4 & Start and accepted transact\allowbreak{}ion identity\\[3pt]
+
+E4: B2 to B4 & Active-bank identity and coeffici\allowbreak{}ent operands\\[3pt]
+
+E5: B4 to B2 & Captured channel,\allowbreak{} bank and tap-group address\\[3pt]
+
+E6: B4 to B3 & Captured channel and tap-group address\\[3pt]
+
+E7: B3 to B4 & Parallel history operands\\[3pt]
+
+E8: B4 to B5 & Exact final accumula\allowbreak{}tor sum\\[3pt]
+
+E9: B5 to B6 & Rounded,\allowbreak{} saturate\allowbreak{}d result\\[3pt]
+
+E10: B4 to B6 & Final capture enable and channel\\[3pt]
+
+E11: B4 to B1 & Computat\allowbreak{}ion busy\\[3pt]
+
+E12: B6 to B1 & Output occupanc\allowbreak{}y\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Interfaces and configuration}
+
+{\small\begin{longtable}{@{}L{0.2\textwidth}L{0.12\textwidth}L{0.1\textwidth}L{0.48\textwidth}@{}}\toprule
+
+\textbf{Signal /\allowbreak{} group} & \textbf{Directio\allowbreak{}n} & \textbf{Width} & \textbf{Contract}\\\midrule\endhead
+
+clk,\allowbreak{} rst\_\allowbreak{}n & Input & 1 bit each & Rising-edge clock and active-low asynchro\allowbreak{}nous reset. Transact\allowbreak{}ions use pre-edge valid/\allowbreak{}ready values.\\[3pt]
+
+s\_\allowbreak{}data,\allowbreak{} s\_\allowbreak{}channel,\allowbreak{} s\_\allowbreak{}valid; s\_\allowbreak{}ready & Input; output & Signed 16,\allowbreak{} 2,\allowbreak{} 1; 1 bits & Input sample stream. Channel encoding\allowbreak{}s 0–3 are legal. Producer\allowbreak{}s hold valid,\allowbreak{} data and channel while stalled.\\[3pt]
+
+m\_\allowbreak{}data,\allowbreak{} m\_\allowbreak{}channel,\allowbreak{} m\_\allowbreak{}valid; m\_\allowbreak{}ready & Output; input & Signed 16,\allowbreak{} 2,\allowbreak{} 1; 1 bits & Ordered result stream. Valid data and channel remain stable until retireme\allowbreak{}nt or reset. Data and channel are zero whenever m\_\allowbreak{}valid is low.\\[3pt]
+
+cfg\_\allowbreak{}valid,\allowbreak{} cfg\_\allowbreak{}channel,\allowbreak{} cfg\_\allowbreak{}addr,\allowbreak{} cfg\_\allowbreak{}data; cfg\_\allowbreak{}ready & Input; output & 1,\allowbreak{} 2,\allowbreak{} ADDR\_\allowbreak{}W,\allowbreak{} signed 16; 1 bits & Writes the addresse\allowbreak{}d channel's inactive coeffici\allowbreak{}ent bank. Acceptan\allowbreak{}ce requires a legal address and no commit request. Address one is rejected even at TAP\_\allowbreak{}COUNT=\allowbreak{}1.\\[3pt]
+
+commit\_\allowbreak{}valid,\allowbreak{} commit\_\allowbreak{}channel; commit\_\allowbreak{}ready & Input; output & 1,\allowbreak{} 2; 1 bits & Requests an atomic bank swap for one channel. Acceptan\allowbreak{}ce requires fresh complete staging,\allowbreak{} an idle MAC and no valid output. There is no pending-request queue.\\[3pt]
+
+\bottomrule\end{longtable}}
+
+{\small\begin{longtable}{@{}L{0.23\textwidth}L{0.12\textwidth}L{0.57\textwidth}@{}}\toprule
+
+\textbf{Paramete\allowbreak{}r} & \textbf{Default} & \textbf{Meaning /\allowbreak{} supporte\allowbreak{}d values}\\\midrule\endhead
+
+TAP\_\allowbreak{}COUNT & 32 & Exactly 1,\allowbreak{} 8,\allowbreak{} 16,\allowbreak{} 32 or 64 taps per channel. All values were simulate\allowbreak{}d and synthesi\allowbreak{}zed.\\[3pt]
+
+MAC\_\allowbreak{}LANES & 1 & Exactly 1,\allowbreak{} 2 or 4 parallel multipli\allowbreak{}cation paths. Every legal tap/\allowbreak{}lane combinat\allowbreak{}ion is supporte\allowbreak{}d,\allowbreak{} includin\allowbreak{}g singleto\allowbreak{}n filters with unused tail lanes.\\[3pt]
+
+ADDR\_\allowbreak{}W,\allowbreak{} ACC\_\allowbreak{}W & 5,\allowbreak{} 37 at default TAP\_\allowbreak{}COUNT & Derived local paramete\allowbreak{}rs: ADDR\_\allowbreak{}W=\allowbreak{}max(\allowbreak{}1,\allowbreak{}ceil(\allowbreak{}log2(\allowbreak{}TAP\_\allowbreak{}COUNT)\allowbreak{})\allowbreak{})\allowbreak{}; ACC\_\allowbreak{}W=\allowbreak{}32+\allowbreak{}ceil(\allowbreak{}log2(\allowbreak{}TAP\_\allowbreak{}COUNT)\allowbreak{})\allowbreak{}. The singleto\allowbreak{}n logarith\allowbreak{}m is zero. Channel count is fixed at four.\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Behavior and corner cases}
+
+\subsection{Exact convolution and quantization}
+
+For channel c and its accepted sample n,\allowbreak{} A[\allowbreak{}c,\allowbreak{}n]\allowbreak{}=\allowbreak{}sum over k of h[\allowbreak{}c,\allowbreak{}k]\allowbreak{}*\allowbreak{}x[\allowbreak{}c,\allowbreak{}n-k]\allowbreak{},\allowbreak{} using signed 16-bit sample and coefficient codes and zero unavailable history. Tap zero multiplies the newest sample. Exact signed 32-bit products are sign-extended to ACC\_\allowbreak{}W before reduction; intermediate rounding,\allowbreak{} truncation and saturation are absent. Let q=\allowbreak{}floor(\allowbreak{}A/\allowbreak{}32768)\allowbreak{},\allowbreak{} r=\allowbreak{}A{\vulcanmathsymbols −}32768q. Increment q when r>16384 or when r=\allowbreak{}16384 and q is odd,\allowbreak{} then clamp to [\allowbreak{}{\vulcanmathsymbols −}32768,\allowbreak{}32767]\allowbreak{}. This implements nearest-even rounding for both signs. Tail lanes contribute zero. [\allowbreak{}E002,\allowbreak{} E005,\allowbreak{} E007]\allowbreak{}
+
+\subsection{Independent state and atomic updates}
+
+Each channel has two banks,\allowbreak{} its own active selector and a TAP\_\allowbreak{}COUNT-bit written mask. Repeated writes overwrite a tap without satisfying other missing addresses. Every tap needs a fresh accepted write after reset or that channel's preceding commit. A final missing write changes completeness only after its edge. Commit flips only the selected channel's bank,\allowbreak{} clears only its written mask and preserves all histories. Reusing old bank contents never substitutes for a fresh complete update. [\allowbreak{}E002,\allowbreak{} E003]\allowbreak{}
+
+\subsection{Priority and ownership}
+
+Exact readiness is s\_\allowbreak{}ready=\allowbreak{}rst\_\allowbreak{}n \&\& !busy \&\& (\allowbreak{}!output\_\allowbreak{}valid || m\_\allowbreak{}ready)\allowbreak{} \&\& !commit\_\allowbreak{}valid; cfg\_\allowbreak{}ready=\allowbreak{}rst\_\allowbreak{}n \&\& !commit\_\allowbreak{}valid \&\& (\allowbreak{}cfg\_\allowbreak{}addr<TAP\_\allowbreak{}COUNT)\allowbreak{}; commit\_\allowbreak{}ready=\allowbreak{}rst\_\allowbreak{}n \&\& staging\_\allowbreak{}complete[\allowbreak{}commit\_\allowbreak{}channel]\allowbreak{} \&\& !busy \&\& !output\_\allowbreak{}valid. Thus any commit request blocks sample and configuration acceptance,\allowbreak{} even if incomplete. No channel can commit during computation or on an output-retirement edge. Without a commit request,\allowbreak{} configuration may coincide with sample acceptance or continue during computation and output stalls; it always targets inactive storage. [\allowbreak{}E002,\allowbreak{} E007]\allowbreak{}
+
+\subsection{Cycle boundaries}
+
+Define G=\allowbreak{}ceil(\allowbreak{}TAP\_\allowbreak{}COUNT/\allowbreak{}MAC\_\allowbreak{}LANES)\allowbreak{}. Acceptance at E0 shifts the selected history and captures ownership. Edges E1 through EG compute the groups; immediately after EG the result is valid and busy is clear. Earliest retirement and replacement acceptance occur at EG+\allowbreak{}1,\allowbreak{} giving an unstalled initiation interval of G+\allowbreak{}1 cycles. A commit cannot share that retirement edge; without replacement work it can occur at EG+\allowbreak{}2. After commit at C,\allowbreak{} the first new-bank sample can be accepted at C+\allowbreak{}1 when commit\_\allowbreak{}valid is deasserted. Backpressure changes retirement and acceptance spacing,\allowbreak{} not computation latency. [\allowbreak{}E001,\allowbreak{} E002]\allowbreak{}
+
+\subsection{Reset and parameter rejection}
+
+Asynchronous reset clears both coefficient banks,\allowbreak{} histories,\allowbreak{} masks,\allowbreak{} selectors,\allowbreak{} arithmetic/\allowbreak{}control state and output state. All public outputs are zero during reset. Accepted but unretired work is canceled without ghost results; subsequent samples initially use zero coefficients. Unsupported parameters elaborate an isolated diagnostic branch and terminate simulation nonzero with PARAMETER ERROR rather than elaborating an invalid datapath. [\allowbreak{}E002–E007]\allowbreak{}
+
+\section{Verification methods and measured results}
+
+\subsection{Numerical accuracy and four-channel protocol coverage}
+
+\textbf{Method.} Icarus Verilog 12.0 compiled and simulated all 15 configurations at three seeds. Python 3.12.3 independently computed per-channel arbitrary-precision convolution and quotient/\allowbreak{}remainder rounding from accepted public transactions,\allowbreak{} checking pre-edge and post-edge observations and rejecting X/\allowbreak{}Z.
+
+\textbf{Result.} 45/\allowbreak{}45 runs passed: 102,\allowbreak{}339 retirements,\allowbreak{} 90 cancellations and zero numerical,\allowbreak{} channel,\allowbreak{} ordering or protocol mismatches. Every run met at least 256 retirements,\allowbreak{} four distinct committed generations and 16 output-stall cycles per channel,\allowbreak{} plus computation,\allowbreak{} stalled-output and blocked-commit reset coverage and final all-channel refill. Complete denominators,\allowbreak{} counts and witnesses are retained in evidence/\allowbreak{}behavior/\allowbreak{}results.json and its per-cell files.
+
+{\small Evidence: E008,\allowbreak{} E009,\allowbreak{} E010,\allowbreak{} E011,\allowbreak{} E019}
+
+\subsection{Directed arithmetic and control interactions}
+
+\textbf{Method.} Observed numerical cases and public transitions covered impulses,\allowbreak{} signed ties and near-ties,\allowbreak{} full-scale products,\allowbreak{} saturation,\allowbreak{} channel isolation,\allowbreak{} repeated writes,\allowbreak{} completeness timing,\allowbreak{} commit exclusion and overlapping output retirement/\allowbreak{}input acceptance.
+
+\textbf{Result.} For 8 taps/\allowbreak{}4 lanes/\allowbreak{}seed 17,\allowbreak{} 1,\allowbreak{}755 outputs matched,\allowbreak{} with 12 commits per channel and stall counts 80/\allowbreak{}81/\allowbreak{}117/\allowbreak{}105 cycles. Coverage included 83 simultaneous configuration/\allowbreak{}sample events,\allowbreak{} 127 writes during computation,\allowbreak{} 83 during output stalls,\allowbreak{} and both same-channel and other-channel blocked commits. Negative saturation and multi-product cancellation apply to multi-tap configurations; inter-lane cancellation applies where multiple lanes are useful.
+
+{\small Evidence: E009,\allowbreak{} E011,\allowbreak{} E019}
+
+\subsection{Measured latency and throughput}
+
+\textbf{Method.} Public handshake traces measured acceptance-to-valid latency,\allowbreak{} acceptance-to-retirement latency and initiation intervals for every cell. Dedicated unstalled phases asserted G-cycle latency and G+\allowbreak{}1-cycle spacing.
+
+\textbf{Result.} Measured valid latency/\allowbreak{}unstalled interval in cycles,\allowbreak{} ordered by lanes 1/\allowbreak{}2/\allowbreak{}4: taps 1: 1/\allowbreak{}2,\allowbreak{} 1/\allowbreak{}2,\allowbreak{} 1/\allowbreak{}2; taps 8: 8/\allowbreak{}9,\allowbreak{} 4/\allowbreak{}5,\allowbreak{} 2/\allowbreak{}3; taps 16: 16/\allowbreak{}17,\allowbreak{} 8/\allowbreak{}9,\allowbreak{} 4/\allowbreak{}5; taps 32: 32/\allowbreak{}33,\allowbreak{} 16/\allowbreak{}17,\allowbreak{} 8/\allowbreak{}9; taps 64: 64/\allowbreak{}65,\allowbreak{} 32/\allowbreak{}33,\allowbreak{} 16/\allowbreak{}17. These are cycle measurements,\allowbreak{} not frequency or lane-count speedup claims. All per-seed ranges are in evidence/\allowbreak{}behavior/\allowbreak{}results.json.
+
+{\small Evidence: E019}
+
+\subsection{Backpressured cycle ranges}
+
+\textbf{Method.} The seed-17 traces provide a comparable measured example for every parameter setting. Extended intervals include backpressure,\allowbreak{} control traffic and stimulus gaps; they are not attributed solely to output stalls.
+
+\textbf{Result.} Acceptance-to-retirement ranges,\allowbreak{} ordered by lanes 1/\allowbreak{}2/\allowbreak{}4,\allowbreak{} were: taps 1: 2–24 for all lanes; taps 8: 9–31,\allowbreak{} 5–27,\allowbreak{} 3–25; taps 16: 17–39,\allowbreak{} 9–31,\allowbreak{} 5–27; taps 32: 33–55,\allowbreak{} 17–39,\allowbreak{} 9–31; taps 64: 65–87,\allowbreak{} 33–55,\allowbreak{} 17–39 cycles. Corresponding extended initiation ranges were 3–26 for all singleton settings; 10–33/\allowbreak{}6–29/\allowbreak{}4–27; 18–53/\allowbreak{}10–45/\allowbreak{}6–41; 34–101/\allowbreak{}18–85/\allowbreak{}10–77; and 66–197/\allowbreak{}34–165/\allowbreak{}18–149 cycles.
+
+{\small Evidence: E019}
+
+\subsection{Atomic bank boundaries}
+
+\textbf{Method.} Generation-tagged transactions were checked against complete mathematical coefficient vectors. Each commit retained surrounding public traces and identified the last old-generation and first new-generation samples where present.
+
+\textbf{Result.} No mixed-generation result or premature commit was observed. One 8/\allowbreak{}4/\allowbreak{}17 channel-zero boundary committed at cycle 173: the last old-generation sample was accepted at 142 and retired at 145 with result zero; the first new-generation sample was accepted at 175,\allowbreak{} became valid at 177 and retired at 178 with expected and observed result 45. Full boundaries are in each cell's bank\_\allowbreak{}boundaries.json.
+
+{\small Evidence: E009,\allowbreak{} E019}
+
+\subsection{F1 compatibility}
+
+\textbf{Method.} Unchanged F1 RTL and F2 ran identical channel-zero traffic with one lane for all five tap counts and three seeds,\allowbreak{} comparing readiness and outputs as well as the independent numerical oracle.
+
+\textbf{Result.} 15/\allowbreak{}15 runs passed with 8,\allowbreak{}472 compared retirements,\allowbreak{} 30 cancellations and zero output-code differences. Initial zero banks,\allowbreak{} complete/\allowbreak{}incomplete updates,\allowbreak{} rounding,\allowbreak{} saturation,\allowbreak{} busy-time writes,\allowbreak{} stalls,\allowbreak{} retirement/\allowbreak{}replacement overlap and reset cancellation were exercised. Other F2 channels remained inactive.
+
+{\small Evidence: E008,\allowbreak{} E009,\allowbreak{} E010,\allowbreak{} E020}
+
+\subsection{Sensitivity to semantic defects}
+
+\textbf{Method.} A passing 8/\allowbreak{}4/\allowbreak{}17 baseline and three disposable mutant copies used the same independent checker. Compilation failures and tool failures did not qualify as detection.
+
+\textbf{Result.} All three mutants were killed by behavioral mismatches: crossed history produced 81 instead of {\vulcanmathsymbols −}1441; reduction-tree corruption produced {\vulcanmathsymbols −}1522 instead of {\vulcanmathsymbols −}1441; relaxed bank ownership incorrectly asserted commit readiness during computation. Patches,\allowbreak{} source identities and triggering transactions are retained under evidence/\allowbreak{}defects/\allowbreak{}mutations/\allowbreak{}.
+
+{\small Evidence: E010,\allowbreak{} E021}
+
+\subsection{Synthesizability,\allowbreak{} state and parallel structure}
+
+\textbf{Method.} Yosys 0.33 executed synth -noabc and check -assert for all 15 settings. Pre-flatten checks inspected named connected children,\allowbreak{} bank/\allowbreak{}history state and distinct signed operand lanes; final netlists were checked for latches and substantive outputs.
+
+\textbf{Result.} 15/\allowbreak{}15 configurations passed with zero latches. Generic cell counts/\allowbreak{}sequential bits,\allowbreak{} ordered by lanes 1/\allowbreak{}2/\allowbreak{}4: taps 1: 3400/\allowbreak{}256,\allowbreak{} 3173/\allowbreak{}255,\allowbreak{} 3270/\allowbreak{}255; taps 8: 9081/\allowbreak{}1633,\allowbreak{} 14396/\allowbreak{}1633,\allowbreak{} 24744/\allowbreak{}1632; taps 16: 15555/\allowbreak{}3203,\allowbreak{} 23955/\allowbreak{}3203,\allowbreak{} 40736/\allowbreak{}3202; taps 32: 28492/\allowbreak{}6341,\allowbreak{} 43240/\allowbreak{}6341,\allowbreak{} 72913/\allowbreak{}6340; taps 64: 54539/\allowbreak{}12615,\allowbreak{} 81814/\allowbreak{}12615,\allowbreak{} 136963/\allowbreak{}12614. Useful multiplier counts were 1/\allowbreak{}2/\allowbreak{}4 for multi-tap settings and one for singleton settings. Detailed structures and netlists accompany evidence/\allowbreak{}synthesis/\allowbreak{}results.json.
+
+{\small Evidence: E013,\allowbreak{} E022}
+
+\subsection{Illegal-parameter diagnostics}
+
+\textbf{Method.} Icarus elaborated taps 0/\allowbreak{}3/\allowbreak{}65 with one lane and lanes 0/\allowbreak{}3/\allowbreak{}8 with eight taps,\allowbreak{} then executed each diagnostic branch.
+
+\textbf{Result.} All six cases compiled successfully and terminated with simulation exit 1 and PARAMETER ERROR.
+
+{\small Evidence: E014,\allowbreak{} E022}
+
+\subsection{Harness reliability and portable reproduction}
+
+\textbf{Method.} Retained preparation failures informed harness-only repairs: explicit \$finish(\allowbreak{}0)\allowbreak{} removed extra finish metadata without relaxing completion checks; singleton structure checking distinguished useful wired lanes from unused tail paths. A fresh source-only tree subsequently executed complete behavior 8/\allowbreak{}4/\allowbreak{}17,\allowbreak{} compatibility 1/\allowbreak{}1/\allowbreak{}17 and synthesis 8/\allowbreak{}4 cells.
+
+\textbf{Result.} The repaired full matrices passed,\allowbreak{} and all three fresh-tree cells passed with matching source identities. Runtime metadata,\allowbreak{} prior evidence and generated binaries were excluded from copied inputs. Preparation failures remain retained separately; they are not acceptance substitutes or product RTL defects.
+
+{\small Evidence: E018,\allowbreak{} E019,\allowbreak{} E022,\allowbreak{} E023}
+
+\section{Integration and use}
+
+Compile all five rtl/\allowbreak{}*\allowbreak{}.sv files with SystemVerilog enabled and select billet\_\allowbreak{}f2\_\allowbreak{}top. Use design/\allowbreak{}SPEC.md for the normative interface and edge contract and design/\allowbreak{}ARCHITECTURE.md for internal connectivity. Packed operand lane l occupies bits [\allowbreak{}16*\allowbreak{}l +\allowbreak{}: 16]\allowbreak{}.
+
+
+Assert reset low before operation. To update channel c,\allowbreak{} keep commit\_\allowbreak{}valid low and handshake every tap into staging,\allowbreak{} then hold commit\_\allowbreak{}valid and commit\_\allowbreak{}channel until acceptance. Deassert the request before further writes or samples. An incomplete held commit intentionally blocks the writes needed to complete it; withdraw it or reset to resume.
+
+
+Keep the output consumer responsive when awaiting commit. Backpressure preserves output and bank ownership indefinitely; the design does not force retirement. Clock-domain crossing and asynchronous-reset release discipline belong to the surrounding integration.
+
+
+External prerequisites are Python 3,\allowbreak{} iverilog,\allowbreak{} vvp and Yosys. From the project root,\allowbreak{} reproduce the full behavior suite with \texttt{python3 tests/\allowbreak{}verify.py --suite behavior --output evidence/\allowbreak{}behavior}.
+
+
+Run compatibility with \texttt{python3 tests/\allowbreak{}verify.py --suite compatibility --output evidence/\allowbreak{}compatibility} and semantic mutations with \texttt{python3 tests/\allowbreak{}verify.py --suite defects --output evidence/\allowbreak{}defects}.
+
+
+Run synthesis and diagnostics with \texttt{python3 tests/\allowbreak{}verify.py --suite synthesis --output evidence/\allowbreak{}synthesis}. Reproduce the executed bounded fresh-tree check with \texttt{python3 tests/\allowbreak{}verify.py --suite portability --output evidence/\allowbreak{}portability}. Existing output directories are preserved through new attempt directories. Per-tool receipts retain exact commands,\allowbreak{} versions,\allowbreak{} source identities and raw outputs.
+
+
+\section{Limitations and acceptance boundary}
+
+Four channels share one engine; they are not four concurrent filters. Global commit exclusion also blocks updates to otherwise idle channels while any computation or valid output exists.
+
+
+Evidence covers finite seeded simulation,\allowbreak{} directed transitions,\allowbreak{} three specific semantic mutants and generic synthesis. It is not exhaustive formal proof or evidence of sensitivity to every possible defect.
+
+
+Generic cells and sequential bits are tool-dependent structural counts,\allowbreak{} not physical area. No target clock frequency,\allowbreak{} timing closure,\allowbreak{} power,\allowbreak{} FPGA resource measurement or silicon result was established.
+
+
+Asynchronous clearing and parallel reads do not guarantee inference of a particular RAM or DSP macro. Technology mapping and implementation constraints remain external.
+
+
+Portable reproduction executed three complete selected cells,\allowbreak{} not a second full matrix. The parent intake supplied RTL but no linked source index,\allowbreak{} parent specification or admitted baseline results; compatibility is supported by the newly executed lockstep and oracle checks rather than intake provenance.
+
+
+\appendix\section{Source inventory}
+
+Production inventory: 5 Verilog/\allowbreak{}SystemVerilog files; 342 nonblank,\allowbreak{} non-comment lines. Source size is not a correctness or quality metric.
+
+{\small\begin{longtable}{@{}L{0.61\textwidth}L{0.15\textwidth}L{0.15\textwidth}@{}}\toprule
+
+\textbf{Producti\allowbreak{}on file} & \textbf{Physical lines} & \textbf{Code lines}\\\midrule\endhead
+
+rtl/\allowbreak{}billet\_\allowbreak{}f2\_\allowbreak{}coeff\_\allowbreak{}bank.sv & 66 & 62\\[3pt]
+
+rtl/\allowbreak{}billet\_\allowbreak{}f2\_\allowbreak{}history.sv & 42 & 38\\[3pt]
+
+rtl/\allowbreak{}billet\_\allowbreak{}f2\_\allowbreak{}mac.sv & 79 & 73\\[3pt]
+
+rtl/\allowbreak{}billet\_\allowbreak{}f2\_\allowbreak{}round\_\allowbreak{}sat.sv & 32 & 28\\[3pt]
+
+rtl/\allowbreak{}billet\_\allowbreak{}f2\_\allowbreak{}top.sv & 149 & 141\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Verification record index}
+
+{\small\begin{longtable}{@{}L{0.57\textwidth}L{0.16\textwidth}L{0.17\textwidth}@{}}\toprule
+
+\textbf{Recorded check} & \textbf{Outcome} & \textbf{Executio\allowbreak{}n time (\allowbreak{}s)\allowbreak{}}\\\midrule\endhead
+
+behavior & passed & 198.410\\[3pt]
+
+f1\_\allowbreak{}compatib\allowbreak{}ility & passed & 33.651\\[3pt]
+
+defect\_\allowbreak{}sensitiv\allowbreak{}ity & passed & 4.815\\[3pt]
+
+synthesi\allowbreak{}s\_\allowbreak{}and\_\allowbreak{}paramete\allowbreak{}r\_\allowbreak{}diagnost\allowbreak{}ics & passed & 1384.432\\[3pt]
+
+portable\_\allowbreak{}reproduc\allowbreak{}tion & passed & 15.762\\[3pt]
+
+\bottomrule\end{longtable}}
+
+Execution times include tool and provider waiting; they are not hardware latency or model utilization.
+
+{\small\begin{longtable}{@{}L{0.12\textwidth}L{0.82\textwidth}@{}}\toprule
+
+\textbf{Referenc\allowbreak{}e} & \textbf{Original project-relative record}\\\midrule\endhead
+
+E008 & tests/\allowbreak{}bridge.py\\[3pt]
+
+E009 & tests/\allowbreak{}model.py\\[3pt]
+
+E010 & tests/\allowbreak{}simulati\allowbreak{}on.py\\[3pt]
+
+E011 & tests/\allowbreak{}stimulus.py\\[3pt]
+
+E013 & tests/\allowbreak{}synthesi\allowbreak{}s.py\\[3pt]
+
+E014 & tests/\allowbreak{}verify.py\\[3pt]
+
+E018 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0002/\allowbreak{}response.json\\[3pt]
+
+E019 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0003/\allowbreak{}stdout.log\\[3pt]
+
+E020 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0004/\allowbreak{}stdout.log\\[3pt]
+
+E021 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0005/\allowbreak{}stdout.log\\[3pt]
+
+E022 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0006/\allowbreak{}stdout.log\\[3pt]
+
+E023 & .vulcan/\allowbreak{}engineer\allowbreak{}ing/\allowbreak{}run-0001/\allowbreak{}attempt-0007/\allowbreak{}stdout.log\\[3pt]
+
+\bottomrule\end{longtable}}
+
+\section{Document provenance}
+
+Engineering was independently accepted for the recorded source and evidence identity. This is not exhaustive proof, hardware deployment or physical signoff. The companion REPORT.md records the exact report approval and source manifest, and links the English/Chinese journeys containing original failures and interventions. A report number identifies a generation attempt, not a new hardware revision.
+
+No developer attribution was supplied; none has been inferred.
+
+\end{document}
