@@ -1,6 +1,6 @@
 {
   "chip": "BILLET-F3",
-  "phase": "verifier",
+  "phase": "interrupted",
   "engineering_accepted": false,
   "report_published": false,
   "checks": []
