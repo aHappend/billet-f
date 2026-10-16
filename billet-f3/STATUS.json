@@ -1,7 +1,60 @@
 {
   "chip": "BILLET-F3",
-  "phase": "checks",
-  "engineering_accepted": false,
-  "report_published": false,
-  "checks": []
+  "phase": "completed",
+  "engineering_accepted": true,
+  "report_published": true,
+  "checks": [
+    {
+      "check": "check:behavior",
+      "status": "passed"
+    },
+    {
+      "check": "check:numerical",
+      "status": "passed"
+    },
+    {
+      "check": "check:defects",
+      "status": "passed"
+    },
+    {
+      "check": "check:synthesis",
+      "status": "passed"
+    },
+    {
+      "check": "check:portable",
+      "status": "passed"
+    }
+  ],
+  "reproduce": [
+    [
+      "python3",
+      "tests/verify.py",
+      "--check",
+      "behavior"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--check",
+      "numerical"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--check",
+      "defects"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--check",
+      "synthesis"
+    ],
+    [
+      "python3",
+      "tests/verify.py",
+      "--check",
+      "portable"
+    ]
+  ]
 }
