@@ -1,34 +1,11 @@
-# BILLET-F3 — Official Technical Design, Co-Simulation & Hardware Verification Report
+# Vulcan product report
 
-| Attribute | Value |
-| --- | --- |
-| **Author & Contact** | **Sufeng Guo** (`sufeng_guo@smail.nju.edu.cn`, `v-sufengguo@microsoft.com`) |
-| **Target FPGA Silicon** | Intel Arria 10 GX (`10AX115N3F40E2SG`) — Microsoft Catapult Longs Peak (`Bedrock 2.1`) |
-| **Verification & EDA Stack** | Icarus Verilog 12.0 · Yosys 0.33 · Intel Quartus Prime 17.1 TimeQuest STA · Physical PCIe Gen3x8 HIL |
-| **Full PDF / LaTeX Source** | [**Download Full Report (`REPORT.pdf`)**](REPORT.pdf) · [**LaTeX Source (`REPORT.tex`)**](REPORT.tex) |
+[Product report (PDF)](REPORT.pdf) | [LaTeX source](REPORT.tex)
 
-## Rendered Report Pages (Full Illustrated Preview)
+[English engineering journey](.vulcan/engineering/JOURNEY.md) | [Chinese companion](.vulcan/engineering/JOURNEY.zh-CN.md)
 
-### Page 1
-![Page 1](report_figures/page-1.png)
+[Source and evidence manifest](.vulcan/engineering/reports/report-0001/manifest.json)
 
-### Page 2
-![Page 2](report_figures/page-2.png)
+[Rendered-PDF review](.vulcan/engineering/reports/report-0001/role-render-01-reviewer/response.json) | [Page-access and artifact binding](.vulcan/engineering/reports/report-0001/render-approval.json)
 
-### Page 3
-![Page 3](report_figures/page-3.png)
-
-### Page 4
-![Page 4](report_figures/page-4.png)
-
-### Page 5
-![Page 5](report_figures/page-5.png)
-
-### Page 6
-![Page 6](report_figures/page-6.png)
-
-### Page 7
-![Page 7](report_figures/page-7.png)
-
-### Page 8
-![Page 8](report_figures/page-8.png)
+Historical generation attempt: `report-0001`; this is not a hardware version number. The report reflects the independently accepted source/check identity recorded in its manifest. Later source changes require revalidation. Original failures and previous report attempts remain retained.
