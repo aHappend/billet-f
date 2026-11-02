@@ -32,6 +32,11 @@ history update occupy separate edges. The final PCM rounding is separate.
 Transaction values, update priorities and inherited history-clear semantics
 remain the compatibility target; old ready waveforms and cycle latency do not.
 
+The FIR coefficient-bank and history module-scope loops use explicit
+`generate`/`endgenerate` regions for Quartus source-staging compatibility.
+Each region encloses the entire named loop, including its clocked read process;
+these delimiters do not change hierarchy, arithmetic, interfaces or latency.
+
 ## Reset, descriptors and reservations
 
 Drive `rst_n` low before sending any descriptor or sample, then release with

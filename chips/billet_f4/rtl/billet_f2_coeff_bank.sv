@@ -23,9 +23,12 @@ module billet_f2_coeff_bank #(
     reg [TAP_COUNT-1:0] staging_written [0:3];
     reg [TAP_COUNT-1:0] valid_zero [0:3],valid_one [0:3];
     genvar channel,lane;
+    generate
     for (channel=0;channel<4;channel=channel+1) begin : g_complete
         assign staging_complete[channel]=&staging_written[channel];
     end
+    endgenerate
+    generate
     for (lane=0;lane<MAC_LANES;lane=lane+1) begin : g_read
         wire [ADDR_W:0] tap_address={1'b0,read_base}+lane;
         reg signed [15:0] coefficient_q;
@@ -40,6 +43,7 @@ module billet_f2_coeff_bank #(
                     bank_zero[read_channel*TAP_COUNT+tap_address]:16'sd0;
         end
     end
+    endgenerate
     always @(posedge clk) begin
         if (rst_n && cfg_write && !commit) begin
             if (active_banks[cfg_channel])

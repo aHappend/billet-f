@@ -16,6 +16,7 @@ module billet_f2_history #(
     reg [ADDR_W:0] fill [0:3];
     wire [ADDR_W-1:0] next_head = (TAP_COUNT==1)?0:head[push_channel]+1'b1;
     genvar lane;
+    generate
     for (lane=0;lane<MAC_LANES;lane=lane+1) begin : g_read
         wire [ADDR_W:0] tap_address={1'b0,read_base}+lane;
         wire [ADDR_W-1:0] address=head[read_channel]-tap_address[ADDR_W-1:0];
@@ -26,6 +27,7 @@ module billet_f2_history #(
                 history[read_channel*TAP_COUNT+((TAP_COUNT==1)?0:address)] : 16'sd0;
         end
     end
+    endgenerate
     always @(posedge clk) begin
         if (rst_n && push) history[push_channel*TAP_COUNT+next_head]<=push_data;
     end
