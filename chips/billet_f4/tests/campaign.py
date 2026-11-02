@@ -257,6 +257,7 @@ def reproduction(evidence):
 
 
 def portable_smoke(evidence):
+    icarus_arithmetic(evidence)
     leaves(evidence)
     complete_frame_smoke(evidence)
 

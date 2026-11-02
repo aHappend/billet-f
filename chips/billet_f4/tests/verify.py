@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 import traceback
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from simulator import Evidence
 
@@ -37,7 +38,7 @@ def main():
     parser.add_argument("--suite", choices=("behavior", "sensitivity", "synthesis",
                                            "reproduction", "portable-smoke"))
     parser.add_argument("--probe", choices=("startup", "leaves", "integration", "synthesis-minimum",
-                                          "controls", "datapath", "logarithm"),
+                                          "controls", "datapath", "logarithm", "portable-smoke"),
                         help="bounded advisory diagnostic")
     parser.add_argument("--repair-of", help="project-relative failed preparation receipt")
     args = parser.parse_args()
