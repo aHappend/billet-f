@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 
 from oracle import (Beamformer, NLMS, VAD, erle, rne, sat, log_token, spectrum,
-                    mel, frontend)
+                    mel, frontend, FIR, SOS, resample)
 
 
 def nlms_vectors(path, taps, seed, full=True):
@@ -320,3 +320,99 @@ def assert_spatial(metrics):
         result[f"angle{angle}"] = {"desired_gain_db": desired_gain,
                                   "sir_improvement_db": sir_gain}
     return result
+
+
+def src_vectors(path, taps=1, seed=17, all_ratios=True):
+    rng=random.Random(seed)
+    pairs=[(l,m) for l in range(1,9) for m in range(1,9)] if all_ratios else [
+        (1,1),(8,8),(7,3)]
+    rows=[]
+    compared=0
+    for case,(l,m) in enumerate(pairs):
+        coefficients=[]
+        for phase in range(l):
+            coefficients.append([65536+phase*4096 if j==0 else
+                                 rng.randint(-1024,1024) for j in range(taps)])
+        samples=[rng.randint(-32768,32767) for _ in range(32)]
+        expected=resample(samples,coefficients,l,m)
+        rows += [f"{l} {m} {case%4} {len(samples)} {len(expected)}\n",
+                 " ".join(str(c) for row in coefficients for c in row)+"\n",
+                 " ".join(map(str,samples))+"\n",
+                 " ".join(map(str,expected))+"\n"]
+        compared+=len(expected)
+    path.write_text(str(len(pairs))+"\n"+"".join(rows))
+    return compared,{"ratios":pairs,"taps":taps,"samples_per_channel_case":32}
+
+
+def legacy_vectors(path,taps=1,sos_count=1,src_taps=1,seed=17,full=True):
+    rng=random.Random(seed)
+    actions=[]
+    compared=0
+    fir_coeffs=[[rng.randint(-4096,4096) for _ in range(taps)] for _ in range(4)]
+    for channel in range(4):
+        fir_coeffs[channel][0]=16384+channel*1024
+    sos_coeffs=[[(65536,8192,-4096,-8192,2048)] +
+                [(65536,0,0,0,0)]*(sos_count-1) for _ in range(4)]
+    fir=[FIR(c) for c in fir_coeffs]
+    sos=[SOS(c) for c in sos_coeffs]
+    for channel in range(4):
+        actions.append(f"1 {channel} "+" ".join(map(str,fir_coeffs[channel]))+"\n")
+        actions.append(f"2 {channel} "+
+                       " ".join(str(c) for row in sos_coeffs[channel] for c in row)+"\n")
+    for mode in range(5):
+        sections=0 if mode<2 else sos_count
+        actions.append(f"4 {mode} {sections} 1\n"); compared+=1
+        sos=[SOS(c) for c in sos_coeffs]
+        for n in range(64 if full else 8):
+            channel=n%4
+            sample=rng.randint(-32768,32767)
+            expected=sample
+            if mode in [1,3]:
+                expected=fir[channel].step(expected)
+            if mode in [2,3,4]:
+                expected=sos[channel].step(expected)
+            if mode==4:
+                expected=fir[channel].step(expected)
+            actions.append(f"6 {channel} {sample} {expected} {rng.randrange(8)}\n")
+            compared+=1
+        if mode==1:
+            # Bank swap retains channel FIR history, unlike the SOS bank swap.
+            new=[-c for c in fir_coeffs[0]]
+            actions.append("1 0 "+" ".join(map(str,new))+"\n")
+            fir_coeffs[0]=new; fir[0].coefficients=new
+    for mode,sections in [(5,0),(0,1),(2,0),(2,sos_count+1)]:
+        actions.append(f"4 {mode} {sections} 0\n"); compared+=1
+    actions.append("4 0 0 1\n"); compared+=1
+    actions.append("5 1\n")
+    for n in range(16):
+        value=rng.randint(-32768,32767)
+        actions.append(f"6 {n%4} {value} {value} {rng.randrange(8)}\n")
+        compared+=1
+    if full:
+        actions.append("9\n")
+        fir_c=[16384]+([8192] if taps>1 else [])+([0]*(taps-2) if taps>1 else [])
+        sos_c=[(65536,8192,0,-8192,0)]+[(65536,0,0,0,0)]*(sos_count-1)
+        src_c=[65536]+[0]*(src_taps-1)
+        actions += ["1 0 "+" ".join(map(str,fir_c))+"\n",
+                    "2 0 "+" ".join(str(c) for row in sos_c for c in row)+"\n",
+                    "3 0 1 "+" ".join(map(str,src_c))+"\n",
+                    f"4 3 {sos_count} 1\n","5 2\n"]
+        compared+=1
+        input_frame=[round(9000*math.sin(2*math.pi*1000*n/16000))+
+                     rng.randint(-1000,1000) for n in range(512)]
+        f_model,s_model=FIR(fir_c),SOS(sos_c)
+        after=[s_model.step(f_model.step(value)) for value in input_frame]
+        transformed=resample(after,[src_c],1,1)
+        _,tokens=frontend(transformed)
+        actions += ["8 0 "+" ".join(map(str,input_frame))+" "+
+                    " ".join(map(str,tokens))+"\n","5 3\n","10\n"]
+        compared+=64+1
+        powers=[rng.randrange(1<<32) for _ in range(257)]
+        tokens=[log_token(energy) for energy in mel(powers)]
+        actions.append("7 3 "+" ".join(map(str,powers))+" "+
+                       " ".join(map(str,tokens))+"\n")
+        compared+=64
+    path.write_text(str(len(actions))+"\n"+"".join(actions))
+    return compared,{"chain_modes":[0,1,2,3,4],"channels":[0,1,2,3],
+                     "tap_count":taps,"sos_count":sos_count,"src_taps":src_taps,
+                     "full_chain_frame":full,"malformed_recovery":full}

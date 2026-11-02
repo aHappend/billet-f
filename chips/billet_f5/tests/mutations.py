@@ -30,10 +30,13 @@ MUTANTS = [
 ]
 
 
-def run_mutations(evidence):
+def run_mutations(evidence, selected=None):
     evidence.versions([("verilator", "--version")])
+    mutants=[row for row in MUTANTS if selected is None or row[0]==selected]
+    if not mutants:
+        raise ValueError("unknown sensitivity diagnostic")
     numerical_vectors = {}
-    for leaf in ["beamformer", "nlms", "vad", "log"]:
+    for leaf in dict.fromkeys(row[4] for row in mutants):
         path = evidence.path / (leaf+".txt")
         if leaf=="beamformer":
             count, _ = beamformer_vectors(path, 8, 17)
@@ -50,7 +53,7 @@ def run_mutations(evidence):
         clean_compiler_intermediates(binary)
         numerical_vectors[leaf]=(path,count)
     outcomes=[]
-    for name, filename, old, new, leaf, parameters in MUTANTS:
+    for name, filename, old, new, leaf, parameters in mutants:
         source=disposable_sources(evidence, "mutant-"+name)
         target=source/"rtl"/filename
         original=target.read_text()
@@ -73,6 +76,6 @@ def run_mutations(evidence):
                                             if "mismatch" in line.lower())})
         evidence.record["metrics"]["mutants"]=outcomes
         evidence.save()
-    if len(outcomes)<7:
+    if selected is None and len(outcomes)<7:
         raise AssertionError("required defect-sensitivity cases missing")
     evidence.record["coverage"]["executed_numerical_mutants"]=len(outcomes)
