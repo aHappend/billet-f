@@ -4,7 +4,7 @@
 
 Top: `billet_f5_top`. Target: Intel Arria 10 GX `10AX115N2F45E1SG`,
 100 MHz or faster (period <=10.0 ns). Design sources are `rtl/*.sv`.
-The eighteen parent modules are copied from read-only
+The eighteen parent modules are copied byte-for-byte from read-only
 `billet_f4_reference/rtl/`; their source index and historical physical results
 are in `design/GENERATIONAL_HANDOFF.md`. Those results are not F5 signoff.
 Independent Verifier owns `tests/*`; the shared runtime owns timing, hardware
@@ -101,6 +101,11 @@ These are descriptions of retained RTL, not new shortened latency promises.
 | Spectrum transform | Full-channel selection in IDLE; 512 synchronous frame/twiddle reads per bin; registered products; accumulated real/imag sums; round-pending, rounded averages, square-sum, saturated power register; OUTPUT holds bin until transfer. Repeat bins0..256. |
 | Mel | Fill257 powers; START resets reduction; per band257 synchronous power/weight reads, registered products, 64-bit accumulation, round-pending and registered energy; OUTPUT holds band. Repeat bands0..63. |
 | Log | Eight globally enabled stages: input energy, normalization/exponent, endpoint/interpolation, interpolated log, dB product, clipped dB, normalization product, token. E0 input is visible after E7 and transferable at E8. |
+
+Inherited chain modes are 0 bypass, 1 FIR, 2 SOS, 3 FIR then SOS, and
+4 SOS then FIR. Feature modes are 0 inherited audio, 1 SRC audio,
+2 SRC/spectrum/Mel/log, and 3 external-power/Mel/log. Reset selects
+chain mode1 and feature mode0.
 
 For exact legacy arbitration and descriptors, the unchanged public interface
 and implementations of `billet_f4_top`, `billet_f3_top` and `billet_f2_top`
