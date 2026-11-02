@@ -4,7 +4,8 @@ import math
 import random
 from pathlib import Path
 
-from oracle import Beamformer, NLMS, erle, rne, sat
+from oracle import (Beamformer, NLMS, VAD, erle, rne, sat, log_token, spectrum,
+                    mel, frontend)
 
 
 def nlms_vectors(path, taps, seed, full=True):
@@ -133,3 +134,189 @@ def beamformer_vectors(path, depth, seed, samples=256):
                     f" {far} {expected} {rng.randrange(6)}\n")
     path.write_text(str(len(rows)) + "\n" + "".join(rows))
     return len(rows), {"epochs": epochs, "depth": depth}
+
+
+def log_vectors(path, seed=17):
+    rng = random.Random(seed)
+    energies = [0, 1, 2, 3, (1 << 48)-1]
+    for exponent in range(48):
+        energies += [(1 << exponent)-1, 1 << exponent, (1 << exponent)+1]
+    for interval in range(16):
+        for residual in [0, 1, 2047, 2048, 2049, 4094, 4095]:
+            energies += [(1 << 30) + ((interval*4096+residual) << 14)]
+    energies += [rng.randrange(1 << 48) for _ in range(256)]
+    rows = [f"{energy} {log_token(energy)} {i%4} {i%64} "
+            f"{int(i%64==63)} {rng.randrange(8)}\n"
+            for i, energy in enumerate(energies) if energy < 1 << 48]
+    path.write_text(str(len(rows)) + "\n" + "".join(rows))
+    return len(rows)
+
+
+def vad_vectors(path):
+    energies = [0, 32767, 32768, 32769, 65535, 65536, 65537,
+                32768, 32767, 0, 0, 0, 0, 65536, 32769, 32768,
+                32767, 32767, 32767, 32767, 0, 125*((1 << 32)-1), 0]
+    model = VAD()
+    rows = []
+    for i, energy in enumerate(energies):
+        rows.append(f"{energy} {model.step(energy)} {i%7} 0\n")
+    model = VAD()
+    rows += [f"32768 {model.step(32768)} 6 1\n",
+             f"65536 {model.step(65536)} 5 0\n",
+             f"0 {VAD().step(0)} 3 1\n"]
+    path.write_text(str(len(rows)) + "\n" + "".join(rows))
+    return len(rows)
+
+
+def spectral_frames(seed=17):
+    rng = random.Random(seed)
+    return [
+        [0]*512, [1000]*512, [32767]+[0]*511,
+        [round(10000*math.sin(2*math.pi*32*n/512)) for n in range(512)],
+        [round(5000*math.sin(2*math.pi*9*n/512)+
+               3000*math.cos(2*math.pi*71*n/512)) for n in range(512)],
+        [rng.randint(-32768, 32767) for _ in range(512)],
+    ]
+
+
+def spectrum_vectors(path, seed=17):
+    rows = []
+    for channel, samples in enumerate(spectral_frames(seed)):
+        powers = spectrum(samples)
+        rows.append(f"{channel%4}\n")
+        rows.append(" ".join(map(str, samples)) + "\n")
+        rows.append(" ".join(map(str, powers)) + "\n")
+    path.write_text("6\n" + "".join(rows))
+    return 6*257
+
+
+def mel_vectors(path, seed=17):
+    rng = random.Random(seed)
+    frames = [spectrum(samples) for samples in spectral_frames(seed)]
+    frames += [[(1 << 32)-1]*257, [rng.randrange(1 << 32) for _ in range(257)]]
+    rows = []
+    for i, powers in enumerate(frames):
+        rows.append(f"{i%4}\n")
+        rows.append(" ".join(map(str, powers)) + "\n")
+        rows.append(" ".join(map(str, mel(powers))) + "\n")
+    path.write_text(str(len(frames)) + "\n" + "".join(rows))
+    return len(frames)*64
+
+
+def acoustic_top_vectors(path, seed=17, taps=16, depth=8, compact=False):
+    rng = random.Random(seed)
+    rows = []
+    metrics = {"epochs": []}
+    comparisons = 0
+    settings = [(1, 1, [0]*8, 1, 12),
+                (0, 0, [rng.randrange(depth*256) for _ in range(8)], 1, 2),
+                (1, 0, [0]*8, 0, 4)]
+    if compact:
+        settings = [(0, 0, [0]*8, 1, 1)]
+    for epoch, (enabled, gated, delays, ready_mode, frame_count) in enumerate(settings):
+        beam = Beamformer(depth, delays)
+        aec = NLMS(taps, enabled)
+        vad = VAD()
+        samples = []
+        audio = []
+        events = []
+        tokens = []
+        echo_history = []
+        for n in range(frame_count*512):
+            frame = n//512
+            far = rng.randint(-4000, 4000) if frame in [1, 2, 3] else 0
+            echo_history.insert(0, far)
+            echo = rne(4*far + 2*(echo_history[3] if len(echo_history)>3 else 0) -
+                       (echo_history[7] if len(echo_history)>7 else 0), 3)
+            near = (round(12000*math.sin(2*math.pi*1000*n/16000))
+                    if compact or frame in [2, 3] or (epoch==1 and frame==0) else 0)
+            microphones = [sat(echo+near+rng.randint(-20, 20))
+                           if compact or frame in [1, 2, 3] else 0 for _ in range(8)]
+            desired = beam.step(microphones)
+            output, frozen = aec.step(desired, far)
+            samples.append(" ".join(map(str, microphones)) +
+                           f" {far} {output} {frozen}\n")
+            audio.append(output)
+            if (n+1)%512==0:
+                energy, frame_tokens = frontend(audio[-512:])
+                decision = vad.step(energy)
+                events.append(f"{energy} {decision}\n")
+                if not gated or decision:
+                    tokens += [f"{token} {band}\n" for band, token in
+                               enumerate(frame_tokens)]
+        count = len(samples)
+        rows += [f"{count} {frame_count} {len(tokens)} {enabled} {gated} {ready_mode}\n",
+                 " ".join(map(str, delays))+"\n", *samples, *events, *tokens]
+        active_frames = sum(int(line.split()[1]) for line in events)
+        metrics["epochs"].append({"samples": count, "frames": frame_count,
+                                   "active_frames": active_frames,
+                                   "suppressed_frames": frame_count-active_frames if gated else 0,
+                                   "tokens": len(tokens), "aec_enabled": enabled,
+                                   "gate_enabled": gated, "ready_mode": ready_mode})
+        comparisons += count+frame_count+len(tokens)+64
+    path.write_text(f"{len(settings)} {seed}\n"+"".join(rows))
+    return comparisons, metrics
+
+
+def spatial_cases(seed):
+    rng = random.Random(seed)
+    size = 4608
+    desired = []
+    noise = []
+    for n in range(size):
+        speech = round(4000*math.sin(2*math.pi*437*n/16000)+
+                       3000*math.sin(2*math.pi*1133*n/16000))
+        desired.append([speech]*8)
+        noise.append([rng.randint(-6124, 6124) for _ in range(8)])
+    yield "broadside-desired", [0]*8, desired
+    yield "broadside-noise", [0]*8, noise
+    for angle in [30, -30]:
+        delays = [i*16000*.04*math.sin(math.radians(angle))/343 for i in range(8)]
+        steering = [round(256*(max(delays)-d)) for d in delays]
+        for label, frequency, arrival in [
+                ("desired", 1000, delays), ("interferer", 2000, [-d for d in delays])]:
+            waves = [[round(6000*math.sin(2*math.pi*frequency*(n-d)/16000))
+                      for d in arrival] for n in range(size)]
+            yield f"angle{angle}-{label}", steering, waves
+
+
+def spatial_vectors(path, delays, microphones):
+    beam = Beamformer(8, delays)
+    outputs = [beam.step(row) for row in microphones]
+    rows = []
+    for n, (row, output) in enumerate(zip(microphones, outputs)):
+        prefix = "1 "+" ".join(map(str, delays))+" " if n==0 else "0 "
+        rows.append(prefix+" ".join(map(str, row))+f" 0 {output} 0\n")
+    path.write_text(str(len(rows))+"\n"+"".join(rows))
+    # Only post-warmup samples contribute to the acoustic measurements.
+    output_energy = sum(x*x for x in outputs[512:])
+    input_energy = [sum(row[i]*row[i] for row in microphones[512:]) for i in range(8)]
+    return len(rows), {"output_energy": output_energy, "input_energy": input_energy,
+                       "measured_samples": len(outputs)-512, "delays_q8": delays}
+
+
+def assert_spatial(metrics):
+    desired = metrics["broadside-desired"]
+    noise = metrics["broadside-noise"]
+    input_snr_db = sum(10*math.log10(s/n) for s, n in
+                       zip(desired["input_energy"], noise["input_energy"]))/8
+    output_snr_db = 10*math.log10(desired["output_energy"]/noise["output_energy"])
+    gain = output_snr_db-input_snr_db
+    if gain < 7:
+        raise AssertionError(f"broadside SNR improvement {gain:.6f} < 7 dB")
+    result = {"broadside_snr_improvement_db": gain,
+              "mean_input_snr_db": input_snr_db, "output_snr_db": output_snr_db}
+    for angle in [30, -30]:
+        desired = metrics[f"angle{angle}-desired"]
+        interferer = metrics[f"angle{angle}-interferer"]
+        input_ratio = sum(desired["input_energy"])/sum(interferer["input_energy"])
+        output_ratio = desired["output_energy"]/interferer["output_energy"]
+        sir_gain = 10*math.log10(output_ratio/input_ratio)
+        desired_gain = 10*math.log10(desired["output_energy"]/
+                                    (sum(desired["input_energy"])/8))
+        if abs(desired_gain)>1 or sir_gain<6:
+            raise AssertionError(f"angle {angle}: desired gain={desired_gain:.6f} dB, "
+                                 f"SIR improvement={sir_gain:.6f} dB")
+        result[f"angle{angle}"] = {"desired_gain_db": desired_gain,
+                                  "sir_improvement_db": sir_gain}
+    return result

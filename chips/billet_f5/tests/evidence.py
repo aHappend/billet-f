@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import resource
 import time
 import uuid
 
@@ -24,6 +25,10 @@ def hashes(root=ROOT):
 
 def stamp():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def no_core_dump():
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
 class Evidence:
@@ -70,7 +75,8 @@ class Evidence:
         self.save()
         start = time.monotonic()
         with stdout.open("wb") as out, stderr.open("wb") as err:
-            process = subprocess.Popen(argv, cwd=directory, stdout=out, stderr=err)
+            process = subprocess.Popen(argv, cwd=directory, stdout=out, stderr=err,
+                                       preexec_fn=no_core_dump)
             timed_out = False
             try:
                 while True:

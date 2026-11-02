@@ -16,7 +16,7 @@ def compile_tb(evidence, top, parameters=None, simulator="verilator", source_roo
     tb = f"tests/{top}.sv"
     if simulator == "iverilog":
         binary = work / "simulation.vvp"
-        argv = ["iverilog", "-g2012", "-Wall", "-s", top, "-o",
+        argv = ["iverilog", "-g2012", "-Wall", "-I", "tests", "-s", top, "-o",
                 evidence.relative(binary)]
         for key, value in (parameters or {}).items():
             argv += ["-P", f"{top}.{key}={value}"]
@@ -24,7 +24,7 @@ def compile_tb(evidence, top, parameters=None, simulator="verilator", source_roo
     else:
         binary = work / ("V" + top)
         argv = ["verilator", "--binary", "--timing", "--assert",
-                "-Wno-fatal", "--top-module", top, "--Mdir",
+                "-Wno-fatal", "-Itests", "--top-module", top, "--Mdir",
                 evidence.relative(work), "-j", "2"]
         argv += [f"-G{k}={v}" for k, v in (parameters or {}).items()]
         argv += [tb, *rtl]
