@@ -1,4 +1,22 @@
-"""Portable, self-contained entrypoint for every admitted BILLET-F5 L1 check."""
+"""Portable, self-contained BILLET-F5 L1 checks; Python stdlib and installed tools.
+
+compatibility: all five inherited modes/four channels, a legal covering matrix,
+64 SRC ratios, spectral frames, every bin/band and full-chain tokens.
+acoustics: each admitted seed, four tap counts/delay depths, fixed convergence,
+double-talk/recovery and spatial thresholds, multi-frame VAD/token accounting.
+robustness: legal/illegal elaboration, signed ties/saturation, pre/post-edge
+latency, reset during division/partial frames, commits and independent stalls.
+defect-sensitivity: unchanged numerical scoreboards reject seven compiled mutants.
+synthesis: complete default/singleton/maximum generic memory-preserving netlists.
+portable: copied declared inputs, fresh interpreter, compact dual simulation and
+real Yosys checks, with no original binary/runtime/report dependencies.
+
+Run from the delivered root: python3 tests/verify.py --suite <suite>; acoustics
+also requires --seed 17, 29 or 43. Every invocation allocates exclusive evidence.
+Interpreted processes are bounded to 600 seconds and fewer than 500000 cycles;
+whole-suite wall time is bounded to 2700 seconds. Large sweeps use Verilator.
+Native physical timing and hardware gates are owned by the shared runtime.
+"""
 
 import argparse
 from pathlib import Path

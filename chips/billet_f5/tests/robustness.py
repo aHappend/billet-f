@@ -4,7 +4,7 @@ import math
 import random
 
 from compatibility import MATRIX
-from oracle import Beamformer, NLMS, frontend
+from oracle import Beamformer, NLMS, FIR, SOS, frontend, resample
 from scenarios import (beamformer_vectors, pipeline_vectors, vad_vectors,
                        log_vectors, acoustic_top_vectors)
 from simulation import compile_tb, execute_tb, clean_compiler_intermediates
@@ -75,9 +75,99 @@ def boundary_vectors(path, depth, seed):
                        "withdrawn_commit": True, "partial_frame_commit": True}
 
 
+def rounding_vectors(path):
+    rows = []
+    configurations = [
+        ([128]*8, [[1]*8, [4]*8, [-1]*8, [-4]*8, [32767]*8, [-32768]*8]),
+        ([0]*8, [[1]*4+[0]*4, [3]*4+[0]*4, [-1]*4+[0]*4, [-3]*4+[0]*4]),
+        ([255]*8, [[32767]*8, [-32768]*8, [1]*8, [-1]*8]),
+    ]
+    for delays, microphones in configurations:
+        model = Beamformer(1, delays)
+        for n, samples in enumerate(microphones):
+            prefix = "1 "+" ".join(map(str, delays))+" " if n == 0 else "0 "
+            rows.append(prefix+" ".join(map(str, samples))+
+                        f" 0 {model.step(samples)} 3\n")
+    path.write_text(str(len(rows))+"\n"+"".join(rows))
+    return len(rows)
+
+
+def nlms_saturation_vectors(path):
+    model = NLMS(1)
+    samples = [(0, 32767)]*64 + [(32767, 512), (0, 123),
+                                (32767, -512), (0, 123),
+                                (-32768, 0), (32767, 0)]
+    rows = []
+    saturated = set()
+    for n, (desired, far) in enumerate(samples):
+        output, frozen = model.step(desired, far)
+        if model.weights[0] in (-(1 << 23), (1 << 23)-1):
+            saturated.add(model.weights[0])
+        rows.append(f"{desired} {far} {output} {frozen} 1 {n%4} 0\n")
+    if saturated != {-(1 << 23), (1 << 23)-1}:
+        raise AssertionError("signed weight-saturation fixture did not reach both limits")
+    path.write_text(str(len(rows))+"\n"+"".join(rows))
+    return len(rows)
+
+
+def legacy_saturation_vectors(path):
+    rows = []
+    compared = 0
+    saturated = {32767: 0, -32768: 0}
+    samples = [32767]*8+[-32768]*8+[32767, -32768, -1, 1]*4
+    for mode in (1, 2, 0):
+        rows.append("9\n")
+        if mode == 1:
+            coefficients = [32767]*8
+            rows.append("1 0 "+" ".join(map(str, coefficients))+"\n")
+            model = FIR(coefficients)
+            expected = [model.step(sample) for sample in samples]
+        elif mode == 2:
+            coefficients = [(131071, 0, 0, 0, 0)]
+            rows.append("2 0 131071 0 0 0 0\n")
+            model = SOS(coefficients)
+            expected = [model.step(sample) for sample in samples]
+        else:
+            coefficients = [131071]+[0]*7
+            rows.append("3 0 1 "+" ".join(map(str, coefficients))+"\n")
+            expected = resample(samples, [coefficients], 1, 1)
+        rows.append(f"4 {mode} {int(mode==2)} 1\n")
+        compared += 1
+        if mode == 0:
+            rows.append("5 1\n")
+        for n, (sample, output) in enumerate(zip(samples, expected)):
+            rows.append(f"6 0 {sample} {output} {n%7}\n")
+            compared += 1
+            if output in saturated:
+                saturated[output] += 1
+    if any(count == 0 for count in saturated.values()):
+        raise AssertionError("inherited positive/negative saturation comparisons missing")
+    path.write_text(str(len(rows))+"\n"+"".join(rows))
+    return compared, {"signed_output_saturations": saturated, "engines": ["FIR", "SOS", "SRC"]}
+
+
 def run_robustness(evidence):
     run_parameters(evidence)
     evidence.versions([("verilator", "--version")])
+    vectors = evidence.path / "descriptor.txt"
+    vectors.write_text("13\n")
+    binary = compile_tb(evidence, "descriptor_tb", simulator="iverilog", name="descriptors")
+    execute_tb(evidence, binary, vectors, "descriptors", 13, "iverilog")
+    vectors = evidence.path / "legacy-saturation.txt"
+    count, metrics = legacy_saturation_vectors(vectors)
+    binary = compile_tb(evidence, "legacy_tb", {"TAPS": 8, "SRC": 8},
+                        name="legacy-saturation")
+    execute_tb(evidence, binary, vectors, "legacy-saturation", count)
+    clean_compiler_intermediates(binary)
+    evidence.record["coverage"]["legacy-saturation"] = metrics
+    for name, top, parameters, generator in (
+            ("signed-rounding-ties", "beamformer_tb", {"DEPTH": 1}, rounding_vectors),
+            ("signed-weight-saturation", "nlms_tb", {"TAPS": 1}, nlms_saturation_vectors)):
+        vectors = evidence.path / (name+".txt")
+        count = generator(vectors)
+        binary = compile_tb(evidence, top, parameters, name=name)
+        execute_tb(evidence, binary, vectors, name, count)
+        clean_compiler_intermediates(binary)
     for depth in (1, 8, 17, 32):
         for leaf, generator in (
                 ("beamformer", beamformer_vectors),

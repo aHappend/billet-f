@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import resource
+import sys
 import time
 import uuid
 
@@ -50,6 +51,7 @@ class Evidence:
             "cwd": ".", "source_sha256": hashes(root), "started_at": stamp(),
             "commands": [], "comparisons": [], "metrics": {}, "coverage": {},
             "repair_of": repair_of,
+            "tool_versions": {"python3": sys.version},
         }
         self.finish_called = False
         self.started = time.monotonic()
@@ -126,7 +128,6 @@ class Evidence:
         return code, stdout, stderr
 
     def versions(self, tools):
-        self.record["tool_versions"] = {}
         for tool, option in tools:
             _, out, err = self.run([tool, option], "version-" + tool)
             text = out.read_text(errors="replace") + err.read_text(errors="replace")

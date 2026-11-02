@@ -40,6 +40,8 @@ def execute_tb(evidence, binary, vectors, name, count, simulator="verilator",
     argv = ([evidence.relative(binary)] if simulator == "verilator" else
             ["vvp", evidence.relative(binary)])
     argv += ["+vectors=" + evidence.relative(vectors)]
+    if simulator == "iverilog":
+        argv += ["+compact_icarus"]
     code, stdout, stderr = evidence.run(
         argv, name + "-simulate", expected_exit=None if rejection else 0)
     text = stdout.read_text(errors="replace") + stderr.read_text(errors="replace")
@@ -50,7 +52,13 @@ def execute_tb(evidence, binary, vectors, name, count, simulator="verilator",
     match = re.search(r"SUMMARY \w+ comparisons=(\d+)", text)
     if not match or int(match.group(1)) != count:
         raise AssertionError(f"{name}: missing or incorrect comparison summary")
+    cycles = re.search(r"CYCLES (\d+)", text)
+    if not cycles or int(cycles.group(1)) <= 0:
+        raise AssertionError(f"{name}: actual simulation cycle count missing")
+    if simulator == "iverilog" and int(cycles.group(1)) >= 500000:
+        raise AssertionError(f"{name}: interpreted simulation is not compact")
     evidence.compared(name, count, simulator=simulator,
+                      cycles=int(cycles.group(1)),
                       stdout=evidence.relative(stdout))
     return text
 

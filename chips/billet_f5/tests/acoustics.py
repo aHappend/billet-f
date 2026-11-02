@@ -1,5 +1,7 @@
 """The admitted per-seed acoustic comparisons and quantitative thresholds."""
 
+import re
+
 from scenarios import (nlms_vectors, assert_convergence, beamformer_vectors,
                        spatial_cases, spatial_vectors, assert_spatial,
                        acoustic_top_vectors)
@@ -41,13 +43,34 @@ def run_acoustics(evidence, seed):
     vectors = evidence.path / "acoustic-top.txt"
     count, metrics = acoustic_top_vectors(vectors, seed, taps=32)
     binary = compile_tb(evidence, "acoustic_top_tb", {"AEC": 32}, name="acoustic-top")
-    execute_tb(evidence, binary, vectors, "acoustic-top", count)
+    text = execute_tb(evidence, binary, vectors, "acoustic-top", count)
     clean_compiler_intermediates(binary)
     first_epoch = metrics["epochs"][0]
     if first_epoch["frames"]<12 or first_epoch["suppressed_frames"]==0 or \
             first_epoch["active_frames"]==0:
         raise AssertionError("observed emitted/suppressed complete-frame coverage missing")
     evidence.record["metrics"]["frontend"] = metrics
+    observed = re.findall(
+        r"EPOCH (\d+) samples=(\d+) events=(\d+) tokens=(\d+) "
+        r"max_interval=(\d+) elapsed=(\d+)", text)
+    if len(observed) != len(metrics["epochs"]):
+        raise AssertionError("measured epoch timing summaries missing")
+    measured_rates = []
+    for fields, expected in zip(observed, metrics["epochs"]):
+        epoch, samples, events, tokens, maximum_interval, elapsed = map(int, fields)
+        if (samples, events, tokens) != (
+                expected["samples"], expected["frames"], expected["tokens"]):
+            raise AssertionError("observed frontend accounting differs from oracle")
+        rate = samples * 100000000 / elapsed
+        if expected["ready_mode"] == 0:
+            if rate < 16000:
+                raise AssertionError("observed T=32 continuously-ready rate below 16000 Hz")
+            measured_rates.append({"epoch": epoch, "tuples_per_second": rate,
+                                   "maximum_acceptance_interval_clocks": maximum_interval,
+                                   "accepted_tuples": samples, "elapsed_clocks": elapsed})
+    if not measured_rates:
+        raise AssertionError("continuously-ready T=32 throughput measurement missing")
+    evidence.record["metrics"]["throughput"] = measured_rates
     evidence.record["coverage"].update(
         aec_taps_executed=[1,8,16,32], delay_depth_executed=[1,8,17,32],
         spatial_samples_per_run=4096, steering_degrees=[30,-30],

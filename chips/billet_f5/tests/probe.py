@@ -15,7 +15,9 @@ from scenarios import (beamformer_vectors, nlms_vectors, log_vectors, vad_vector
 from simulation import compile_tb, execute_tb, clean_compiler_intermediates
 from synthesis import synthesize
 from mutations import run_mutations
-from robustness import boundary_vectors, nlms_reset_vectors, run_parameters
+from robustness import (boundary_vectors, nlms_reset_vectors, run_parameters,
+                        rounding_vectors, nlms_saturation_vectors,
+                        legacy_saturation_vectors)
 from portable import run_portable
 
 
@@ -25,7 +27,9 @@ def main():
                                          "spectrum", "mel", "acoustic_top",
                                          "synthesis", "mutation","legacy","src",
                                          "beamformer_pipeline","fork","boundary",
-                                         "nlms_reset","parameters","portable"], required=True)
+                                         "nlms_reset","parameters","portable",
+                                         "rounding","weight_saturation","dispatch",
+                                         "descriptor","legacy_saturation"], required=True)
     parser.add_argument("--parameter", type=int, default=1)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--simulator", choices=["iverilog", "verilator"],
@@ -42,7 +46,7 @@ def main():
     evidence = Evidence(f"{args.leaf}-{args.parameter}-seed{args.seed}",
                         preparation=True, repair_of=args.repair_of)
     evidence.record["argv"] = ["python3", "tests/probe.py", *sys.argv[1:]]
-    if args.leaf in {"synthesis","mutation","parameters","portable"}:
+    if args.leaf in {"synthesis","mutation","parameters","portable","dispatch"}:
         try:
             if args.leaf=="synthesis":
                 evidence.versions([("yosys","-V")])
@@ -52,8 +56,18 @@ def main():
                 run_mutations(evidence,args.mutant)
             elif args.leaf=="parameters":
                 run_parameters(evidence)
-            else:
+            elif args.leaf=="portable":
                 run_portable(evidence)
+            else:
+                evidence.versions([("python3","--version")])
+                _,out,_=evidence.run(
+                    ["python3","-P","tests/verify.py","--help"],"safe-path-entrypoint")
+                text=out.read_text()
+                for suite in ("compatibility","acoustics","robustness",
+                              "defect-sensitivity","synthesis","portable"):
+                    if suite not in text:
+                        raise AssertionError("entrypoint missing suite "+suite)
+                evidence.compared("entrypoint-dispatch-import",6,kind="harness")
         except BaseException as error:
             print(evidence.finish(error),flush=True)
             raise
@@ -93,13 +107,27 @@ def main():
         elif args.leaf == "nlms_reset":
             count,metrics=nlms_reset_vectors(vectors,args.parameter,args.seed)
             parameters={"TAPS":args.parameter}
+        elif args.leaf == "rounding":
+            count=rounding_vectors(vectors)
+            parameters,metrics={"DEPTH":1},{}
+        elif args.leaf == "weight_saturation":
+            count=nlms_saturation_vectors(vectors)
+            parameters,metrics={"TAPS":1},{}
+        elif args.leaf == "descriptor":
+            vectors.write_text("13\n")
+            count,parameters,metrics=13,{},{}
+        elif args.leaf == "legacy_saturation":
+            count,metrics=legacy_saturation_vectors(vectors)
+            parameters={"TAPS":8,"SRC":8}
         else:
             generator = {"log": log_vectors, "vad": vad_vectors,
                          "spectrum": spectrum_vectors, "mel": mel_vectors}[args.leaf]
             count = generator(vectors)
             parameters, metrics = {}, {}
         evidence.record["metrics"] = metrics
-        top = "nlms_tb" if args.leaf == "nlms_reset" else args.leaf + "_tb"
+        top = ({"nlms_reset":"nlms_tb","weight_saturation":"nlms_tb",
+                "rounding":"beamformer_tb","legacy_saturation":"legacy_tb"}.get(
+                    args.leaf, args.leaf+"_tb"))
         binary = compile_tb(evidence, top, parameters, args.simulator)
         execute_tb(evidence, binary, vectors, args.leaf, count, args.simulator)
         if args.leaf == "nlms" and args.full:
