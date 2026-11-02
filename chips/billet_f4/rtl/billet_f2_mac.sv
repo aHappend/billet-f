@@ -23,7 +23,6 @@ module billet_f2_mac #(
     logic [ADDR_W:0] tap_index;
     logic signed [ACC_W-1:0] accumulator;
     wire signed [ACC_W-1:0] reduction [0:2*MAC_LANES-2];
-    logic [16*MAC_LANES-1:0] samples_q, coeffs_q;
     logic signed [31:0] products_q [0:MAC_LANES-1];
     logic signed [ACC_W-1:0] reduction_q;
     logic read_valid, product_valid, reduction_valid;
@@ -44,8 +43,8 @@ module billet_f2_mac #(
             wire signed [31:0] product;
             wire signed [ACC_W-1:0] extended_product;
 
-            assign sample_operand = samples_q[16*lane +: 16];
-            assign coeff_operand = coeffs_q[16*lane +: 16];
+            assign sample_operand = sample_lanes[16*lane +: 16];
+            assign coeff_operand = coeff_lanes[16*lane +: 16];
             assign product = sample_operand * coeff_operand;
             assign extended_product = {{(ACC_W-32){products_q[lane][31]}}, products_q[lane]};
             assign reduction[MAC_LANES-1+lane] = extended_product;
@@ -68,8 +67,6 @@ module billet_f2_mac #(
             accumulator <= {ACC_W{1'b0}};
             read_channel <= 2'd0;
             read_bank <= 1'b0;
-            samples_q <= 0;
-            coeffs_q <= 0;
             read_valid <= 0;
             product_valid <= 0;
             reduction_valid <= 0;
@@ -98,9 +95,10 @@ module billet_f2_mac #(
             reduction_q <= reduction[0];
             done_q <= reduction_valid && reduction_last;
             if (busy && (tap_index < TAP_COUNT)) begin
-                samples_q <= sample_lanes;
-                coeffs_q <= coeff_lanes;
-                tap_index <= tap_index + MAC_LANES;
+                if (tap_index + MAC_LANES >= TAP_COUNT)
+                    tap_index <= TAP_COUNT;
+                else
+                    tap_index <= tap_index + MAC_LANES;
             end
             if (reduction_valid)
                 accumulator <= accumulator + reduction_q;
