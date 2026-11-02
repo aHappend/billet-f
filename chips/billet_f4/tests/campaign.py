@@ -475,6 +475,8 @@ def ratio_case(sim, taps, l, m, seed, samples=256, stalls=True):
     finish_program(p, "m", len(expected), tail=4096)
     records = sim.execute(p, f"src-{taps}-{l}-{m}-seed{seed}")
     compare(records, sim, "m", expected)
+    if top:
+        assert not output_records(records, sim, "t"), "tokens leaked in SRC PCM mode"
     reached = {(j * m) % l for j in range(l)}
     assert all(active == reached for active in phases), f"unreached active phase: {phases} {reached}"
     assert len(input_records(records, sim, "s")) == samples * 4
@@ -1051,6 +1053,24 @@ def control_matrix(evidence):
     p.check("p_ready", 0)
     p.send("s", -199, 2)
     expected.append(pcm(-199, 2))
+    p.drain("m", len(expected))
+    p.wait(32)
+    for tap in range(8):
+        p.send("src_cfg", 3, 0, tap, 65536 if tap == 0 else 0)
+    p.set("src_commit_channel", 3)
+    p.set("src_l", 1)
+    p.set("src_m", 1)
+    p.set("src_commit_valid", 1)
+    p.set("chain_mode", 0)
+    p.set("chain_sections", 0)
+    p.set("chain_valid", 1)
+    p.check("src_commit_ready", 1)
+    p.check("chain_ready", 0)
+    p.wait(1)
+    p.set("src_commit_valid", 0)
+    p.check("chain_ready", 1)
+    p.wait(1)
+    p.set("chain_valid", 0)
     finish_program(p, "m", len(expected))
     records = sim.execute(p, "controls-priorities-banks-reset")
     compare(records, sim, "m", expected)
@@ -1076,13 +1096,19 @@ def control_matrix(evidence):
             for sample, retirement in zip(samples[:11], retirements[:11]))
         for write in writes)
     assert busy_write_edges > 0, "inactive-bank writes were not accepted during live work"
+    src_priority = [r for r in src_commits if r[2] == 3 and r[3] == 1 and r[4] == 1]
+    assert len(src_priority) == 1
+    assert any(r[0] == src_priority[0][0]+1 and r[2] == 0 for r in chains)
     ledger(evidence, "control-matrix", pcm_comparisons=len(expected),
            explicit_busy_reset_cancellations=1, explicit_stalled_reset_cancellations=1,
            mode_discard_pcm_samples=20, mode_discard_spectral_beats=1,
-           simultaneous_priority_edges=5, illegal_chain_descriptors=7)
+           simultaneous_priority_edges=7, illegal_chain_descriptors=7,
+           observed_busy_inactive_writes=busy_write_edges)
     reset_feature_engines(evidence)
     round_robin_frames(evidence)
     legacy_arithmetic_extremes(evidence)
+    mode_history_preservation(evidence, sim)
+    channel_frame_clear(evidence)
 
 
 def reset_feature_engines(evidence):
@@ -1616,3 +1642,102 @@ def datapath_probe(evidence):
     ledger(evidence, "default-datapath-probe", parent_comparisons=768,
            retimed_legacy_comparisons=768, token_comparisons=64,
            chain_mode=3, l=2, m=3, converted_samples=512)
+
+
+def mode_history_preservation(evidence, sim):
+    p, expected = sim.program(), []
+    fir, sos = legacy_banks(8, 4)
+    configure_legacy(p, fir, sos, 3, 4)
+    model = Legacy(fir, sos, 3, 4)
+    for value in sample_patterns(32, 11):
+        for ch in range(4):
+            p.send("s", value, ch)
+            expected.append(pcm(model.sample(value, ch), ch))
+    p.drain("m", len(expected))
+    p.send("feature", 1)
+    for value in sample_patterns(16, 29):
+        for ch in range(4):
+            p.send("s", value, ch)
+            expected.append(pcm(model.sample(value, ch), ch))
+    p.drain("m", len(expected))
+    p.send("feature", 2)
+    for value in sample_patterns(16, 47):
+        for ch in range(4):
+            p.send("s", value, ch)
+            model.sample(value, ch)
+    p.send("feature", 0)
+    for value in sample_patterns(16, 11):
+        for ch in range(4):
+            p.send("s", value, ch)
+            expected.append(pcm(model.sample(value, ch), ch))
+    finish_program(p, "m", len(expected))
+    records = sim.execute(p, "mode-change-preserves-fir-sos-history-coefficients")
+    compare(records, sim, "m", expected)
+    assert not output_records(records, sim, "t")
+    ledger(evidence, "mode-history-preservation", pcm_comparisons=len(expected),
+           chain_mode=3, sections=4, explicitly_discarded_feature_samples_per_channel=16)
+
+
+def channel_frame_clear(evidence):
+    sim = Simulator(evidence, "top", {"TAP_COUNT": 1, "MAC_LANES": 4,
+                                    "SOS_COUNT": 1, "SRC_TAPS": 1}).build()
+    p, expected = sim.program(), []
+    p.send("chain", 0, 0)
+    p.send("feature", 2)
+    preserved = audio_frame(4, 512, 16000, 29)
+    for n in range(256):
+        p.send("s", 12000, 0)
+        p.send("s", preserved[n], 1)
+    p.wait(32)
+    p.send("src_cfg", 0, 0, 0, 65536)
+    p.send("src_commit", 0, 1, 1)
+    for value in preserved[256:]:
+        p.send("s", value, 1)
+    expected += tagged([token(e) for e in mel(spectrum(preserved))], 1)
+    p.drain("t", len(expected))
+    fresh = audio_frame(5, 512, 16000, 47)
+    for value in fresh:
+        p.send("s", value, 0)
+    expected += tagged([token(e) for e in mel(spectrum(fresh))], 0)
+    p.drain("t", len(expected))
+    p.send("feature", 3)
+    powers = [((k + 1) * 131071) & 0xffffffff for k in range(257)]
+    # Commit on another channel retains the partial spectral frame.
+    for k in range(128):
+        p.send("p", powers[k], 1, k, 0)
+    p.send("src_cfg", 0, 0, 0, 65536)
+    p.send("src_commit", 0, 1, 1)
+    for k in range(128, 257):
+        p.send("p", powers[k], 1, k, k == 256)
+    expected += tagged([token(e) for e in mel(powers)], 1)
+    p.drain("t", len(expected))
+    # Matching-channel commit discards just that partial frame without error.
+    for k in range(128):
+        p.send("p", powers[k], 0, k, 0)
+    p.send("src_cfg", 0, 0, 0, 65536)
+    p.send("src_commit", 0, 1, 1)
+    p.check("feature_error", 0)
+    for k in range(257):
+        p.send("p", powers[k], 0, k, k == 256)
+    expected += tagged([token(e) for e in mel(powers)], 0)
+    p.drain("t", len(expected))
+    p.send("p", 3, 0, 2, 0)
+    p.check("feature_error", 1)
+    p.send("src_cfg", 0, 0, 0, 65536)
+    p.send("src_commit", 0, 1, 1)
+    p.check("feature_error", 1)
+    # This entire well-formed-looking frame remains in discard-until-last.
+    for k in range(257):
+        p.send("p", powers[k], 0, k, k == 256)
+    p.wait(512)
+    for k in range(257):
+        p.send("p", powers[k], 2, k, k == 256)
+    expected += tagged([token(e) for e in mel(powers)], 2)
+    finish_program(p, "t", len(expected))
+    records = sim.execute(p, "src-commit-partial-frame-channel-isolation")
+    compare(records, sim, "t", expected)
+    assert not output_records(records, sim, "m")
+    ledger(evidence, "src-commit-frame-isolation", token_comparisons=len(expected),
+           preserved_partial_pcm_samples=256, discarded_partial_pcm_samples=256,
+           preserved_partial_spectral_bins=128, discarded_partial_spectral_bins=128,
+           retained_error_discard_frames=1)
