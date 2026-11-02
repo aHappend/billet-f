@@ -36,7 +36,8 @@ def main():
                         default="iverilog")
     parser.add_argument("--repair-of")
     parser.add_argument("--full", action="store_true")
-    parser.add_argument("--mutant", default="weight-leakage-removed")
+    parser.add_argument("--mutant", default="weight-leakage-removed",
+                        help="mutation name, or all for all seven cases")
     args = parser.parse_args()
     if args.simulator=="iverilog" and (
             args.full or args.leaf in {"spectrum","mel","mutation"} or
@@ -53,7 +54,7 @@ def main():
                 synthesize(evidence,"singleton",{"DELAY_DEPTH":1,"AEC_TAPS":1,
                                                 "TAP_COUNT":1,"SRC_TAPS":1,"SOS_COUNT":1})
             elif args.leaf=="mutation":
-                run_mutations(evidence,args.mutant)
+                run_mutations(evidence,None if args.mutant=="all" else args.mutant)
             elif args.leaf=="parameters":
                 run_parameters(evidence)
             elif args.leaf=="portable":

@@ -57,11 +57,19 @@ def run_mutations(evidence, selected=None):
         source=disposable_sources(evidence, "mutant-"+name)
         target=source/"rtl"/filename
         original=target.read_text()
-        occurrences=original.count(old)
-        required=2 if name=="microphone-seven-omitted" else 1
-        if occurrences!=required:
-            raise AssertionError(f"{name}: mutation site count {occurrences} != {required}")
-        modified=original.replace(old,new)
+        replacements=[(old,new)]
+        if name=="microphone-seven-omitted":
+            replacements.append((
+                "s_mics[16*history_mic+:16]",
+                "((history_mic==7)?16'sd0:s_mics[16*history_mic+:16])"))
+        for before, after in replacements:
+            occurrences=original.count(before)
+            if occurrences!=1:
+                raise AssertionError(
+                    f"{name}: mutation site {before!r} count {occurrences} != 1")
+        modified=original
+        for before, after in replacements:
+            modified=modified.replace(before,after)
         target.write_text(modified)
         evidence.artifact(target)
         binary=compile_tb(evidence,leaf+"_tb",parameters,source_root=source,name=name)
