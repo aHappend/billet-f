@@ -4,23 +4,28 @@ import argparse
 from pathlib import Path
 import sys
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from evidence import Evidence
 from constants import assert_constants, assert_oracle_primitives
 from scenarios import (beamformer_vectors, nlms_vectors, log_vectors, vad_vectors,
                        spectrum_vectors, mel_vectors, acoustic_top_vectors,
-                       assert_convergence, legacy_vectors, src_vectors)
+                       assert_convergence, legacy_vectors, src_vectors, pipeline_vectors)
 from simulation import compile_tb, execute_tb, clean_compiler_intermediates
 from synthesis import synthesize
 from mutations import run_mutations
+from robustness import boundary_vectors, nlms_reset_vectors, run_parameters
+from portable import run_portable
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--leaf", choices=["beamformer", "nlms", "log", "vad",
                                          "spectrum", "mel", "acoustic_top",
-                                         "synthesis", "mutation","legacy","src"], required=True)
+                                         "synthesis", "mutation","legacy","src",
+                                         "beamformer_pipeline","fork","boundary",
+                                         "nlms_reset","parameters","portable"], required=True)
     parser.add_argument("--parameter", type=int, default=1)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--simulator", choices=["iverilog", "verilator"],
@@ -37,14 +42,18 @@ def main():
     evidence = Evidence(f"{args.leaf}-{args.parameter}-seed{args.seed}",
                         preparation=True, repair_of=args.repair_of)
     evidence.record["argv"] = ["python3", "tests/probe.py", *sys.argv[1:]]
-    if args.leaf in {"synthesis","mutation"}:
+    if args.leaf in {"synthesis","mutation","parameters","portable"}:
         try:
             if args.leaf=="synthesis":
                 evidence.versions([("yosys","-V")])
                 synthesize(evidence,"singleton",{"DELAY_DEPTH":1,"AEC_TAPS":1,
                                                 "TAP_COUNT":1,"SRC_TAPS":1,"SOS_COUNT":1})
-            else:
+            elif args.leaf=="mutation":
                 run_mutations(evidence,args.mutant)
+            elif args.leaf=="parameters":
+                run_parameters(evidence)
+            else:
+                run_portable(evidence)
         except BaseException as error:
             print(evidence.finish(error),flush=True)
             raise
@@ -72,13 +81,26 @@ def main():
         elif args.leaf == "src":
             count,metrics=src_vectors(vectors,taps=args.parameter,all_ratios=False)
             parameters={"TAPS":args.parameter}
+        elif args.leaf == "beamformer_pipeline":
+            count=pipeline_vectors(vectors,args.parameter,args.seed)
+            parameters,metrics={"DEPTH":args.parameter},{}
+        elif args.leaf == "fork":
+            vectors.write_text("256\n")
+            count,parameters,metrics=256,{},{}
+        elif args.leaf == "boundary":
+            count,metrics=boundary_vectors(vectors,args.parameter,args.seed)
+            parameters={"DEPTH":args.parameter}
+        elif args.leaf == "nlms_reset":
+            count,metrics=nlms_reset_vectors(vectors,args.parameter,args.seed)
+            parameters={"TAPS":args.parameter}
         else:
             generator = {"log": log_vectors, "vad": vad_vectors,
                          "spectrum": spectrum_vectors, "mel": mel_vectors}[args.leaf]
             count = generator(vectors)
             parameters, metrics = {}, {}
         evidence.record["metrics"] = metrics
-        binary = compile_tb(evidence, args.leaf + "_tb", parameters, args.simulator)
+        top = "nlms_tb" if args.leaf == "nlms_reset" else args.leaf + "_tb"
+        binary = compile_tb(evidence, top, parameters, args.simulator)
         execute_tb(evidence, binary, vectors, args.leaf, count, args.simulator)
         if args.leaf == "nlms" and args.full:
             assert_convergence(metrics)

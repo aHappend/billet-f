@@ -416,3 +416,17 @@ def legacy_vectors(path,taps=1,sos_count=1,src_taps=1,seed=17,full=True):
     return compared,{"chain_modes":[0,1,2,3,4],"channels":[0,1,2,3],
                      "tap_count":taps,"sos_count":sos_count,"src_taps":src_taps,
                      "full_chain_frame":full,"malformed_recovery":full}
+
+
+def pipeline_vectors(path,depth=17,seed=17):
+    rng=random.Random(seed)
+    delays=[rng.randrange(depth*256) for _ in range(8)]
+    delays[0]=0; delays[7]=(depth-1)*256+255
+    model=Beamformer(depth,delays)
+    rows=[]
+    for n in range(512):
+        microphones=[rng.randint(-32768,32767) for _ in range(8)]
+        far=rng.randint(-32768,32767)
+        rows.append(" ".join(map(str,microphones))+f" {far} {model.step(microphones)}\n")
+    path.write_text("512\n"+" ".join(map(str,delays))+"\n"+"".join(rows))
+    return len(rows)

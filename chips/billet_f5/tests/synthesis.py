@@ -37,7 +37,7 @@ def synthesize(evidence, name, parameters):
     required=["u_legacy","u_beamformer","u_aec","u_audio_fork",
               "u_acoustic_spectrum","u_vad","u_acoustic_mel","u_acoustic_log"]
     instances={cell_name.split(".")[-1]:cell for cell_name,cell in top["cells"].items()}
-    if any(name not in instances for name in required):
+    if any(instance not in instances for instance in required):
         raise AssertionError("required functional hierarchy optimized away")
     primitive_counts=Counter()
     memory_bits=0
@@ -67,14 +67,14 @@ def synthesize(evidence, name, parameters):
     visit("billet_f5_top")
     if sum(primitive_counts.values())<100 or register_bits<1000 or memory_bits<32768:
         raise AssertionError("non-substantive synthesized datapath or missing frame storage")
-    for name in required:
-        module=modules[instances[name]["type"]]
+    for instance in required:
+        module=modules[instances[instance]["type"]]
         if len(module["cells"])<2:
-            raise AssertionError("constant/empty functional engine "+name)
+            raise AssertionError("constant/empty functional engine "+instance)
     aec_module=modules[instances["u_aec"]["type"]]
     if not any(cell_name.endswith("u_divider") for cell_name in aec_module["cells"]):
         raise AssertionError("serial NLMS divider missing after synthesis")
-    if not any("weights" in name for name in aec_module["netnames"]):
+    if not any("weights" in wire_name for wire_name in aec_module["netnames"]):
         raise AssertionError("adaptive weight state missing after synthesis")
     original_hash=hashlib.sha256(netlist.read_bytes()).hexdigest()
     original_bytes=netlist.stat().st_size

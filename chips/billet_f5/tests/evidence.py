@@ -52,6 +52,9 @@ class Evidence:
             "repair_of": repair_of,
         }
         self.finish_called = False
+        self.started = time.monotonic()
+        self.deadline = self.started + 2700
+        self.record["suite_timeout_s"] = 2700
         self.save()
 
     def relative(self, path):
@@ -62,7 +65,14 @@ class Evidence:
         (self.path / "receipt.json").write_text(
             json.dumps(self.record, indent=2, sort_keys=True) + "\n")
 
-    def run(self, argv, name, timeout=3600, cwd=None, expected_exit=0):
+    def remaining(self):
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("suite exceeded its 2700-second execution budget")
+        return remaining
+
+    def run(self, argv, name, timeout=600, cwd=None, expected_exit=0):
+        timeout = min(timeout, 600, self.remaining())
         directory = cwd or self.root
         stdout = self.path / (name + ".stdout.txt")
         stderr = self.path / (name + ".stderr.txt")
@@ -75,13 +85,20 @@ class Evidence:
         self.save()
         start = time.monotonic()
         with stdout.open("wb") as out, stderr.open("wb") as err:
-            process = subprocess.Popen(argv, cwd=directory, stdout=out, stderr=err,
-                                       preexec_fn=no_core_dump)
+            try:
+                process = subprocess.Popen(argv, cwd=directory, stdout=out, stderr=err,
+                                           preexec_fn=no_core_dump)
+            except OSError as error:
+                entry.update(ended_at=stamp(), duration_s=time.monotonic() - start,
+                             exit_code=None, timed_out=False, error=str(error))
+                self.save()
+                raise
             timed_out = False
             try:
                 while True:
                     try:
-                        code = process.wait(timeout=30)
+                        code = process.wait(timeout=min(
+                            30, max(.001, timeout - (time.monotonic() - start))))
                         break
                     except subprocess.TimeoutExpired:
                         print(f"progress {name}: {int(time.monotonic()-start)}s",
@@ -91,9 +108,13 @@ class Evidence:
                             process.kill()
                             code = process.wait()
                             break
-            except BaseException:
+            except BaseException as error:
                 process.kill()
-                process.wait()
+                code = process.wait()
+                entry.update(ended_at=stamp(), duration_s=time.monotonic() - start,
+                             exit_code=code, timed_out=isinstance(error, TimeoutError),
+                             error=str(error))
+                self.save()
                 raise
         entry.update(ended_at=stamp(), duration_s=time.monotonic() - start,
                      exit_code=code, timed_out=timed_out)
@@ -113,6 +134,7 @@ class Evidence:
         self.save()
 
     def compared(self, name, count, **details):
+        self.remaining()
         if count <= 0:
             raise AssertionError(f"{name}: no comparisons executed")
         self.record["comparisons"].append(
@@ -128,6 +150,10 @@ class Evidence:
         self.save()
 
     def finish(self, error=None):
+        if error is None and time.monotonic() > self.deadline:
+            error = TimeoutError("suite exceeded its 2700-second execution budget")
+        if error is None and not self.record["comparisons"]:
+            error = AssertionError("no independent comparisons executed")
         self.record.update(ended_at=stamp(), exit_code=0 if error is None else 1,
                            status="passed" if error is None else "failed")
         if error is not None:
