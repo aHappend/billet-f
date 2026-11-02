@@ -48,6 +48,12 @@ module billet_f5_beamformer #(
         assign idle=rst_n && !(|valid_q);
         billet_f3_round_sat #(.IN_W(19),.SHIFT(3),.OUT_W(16)) u_sum_round (
             .value(total),.result(rounded_total));
+        integer history_mic;
+        always @(posedge clk) begin
+            if (accept)
+                for (history_mic=0;history_mic<8;history_mic=history_mic+1)
+                    history[history_mic*DELAY_DEPTH+head]<=s_mics[16*history_mic+:16];
+        end
         genvar mic;
         for (mic=0;mic<8;mic=mic+1) begin : g_microphone
             wire [DELAY_W+7:0] delay_value=delays[{active,3'b000}+mic];
@@ -66,9 +72,6 @@ module billet_f5_beamformer #(
             wire signed [15:0] rounded_microphone;
             billet_f3_round_sat #(.IN_W(26),.SHIFT(8),.OUT_W(16)) u_round (
                 .value(interpolation[mic]),.result(rounded_microphone));
-            always @(posedge clk) begin
-                if (accept) history[mic*DELAY_DEPTH+head]<=s_mics[16*mic+:16];
-            end
             always @(posedge clk or negedge rst_n) begin
                 if (!rst_n) begin
                     u_q[mic]<=0; v_q[mic]<=0; fraction_q[mic]<=0;

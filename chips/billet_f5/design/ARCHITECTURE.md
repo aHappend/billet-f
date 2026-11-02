@@ -68,6 +68,25 @@ Reset uses the zero-delay bank. The beam pipeline carries far metadata through
 all eight stages. Ring storage is intentionally small, multi-read register
 storage, not a purported single-port RAM.
 
+### Beamformer storage-ownership repair
+
+The retained native failure receipt
+`.vulcan/engineering/run-0001/quartus-sta.json` reports Quartus errors
+10028/10029 for multiple drivers on flattened beamformer history, followed
+by hierarchy failure and STA exit3 without extracted timing paths.
+Eight generated clocked writers used dynamically indexed slices of one array;
+Quartus did not resolve their disjoint ownership. The repaired RTL retains
+that array but gives it one synchronous writer with a constant-bounded
+eight-microphone loop. This diagnostic receipt is historical context, not a
+product input or execution prerequisite.
+
+Writes remain nonblocking and enabled only by accepted tuples. Operand capture
+still reads pre-write history, including the oldest legal age at head wrap.
+Reset/commit still invalidate history through head/fill metadata without
+resetting storage. Delay banks, arithmetic, far alignment, the eight registered
+stages and global stalls are unchanged. Fresh affected checks and native
+Quartus execution are required; this repair does not establish timing closure.
+
 AEC holds T signed 24-bit weights, a T-entry captured sample vector, far history,
 32-bit power estimates, a 45-bit dot accumulator and 36-bit denominator.
 The serial 56-bit magnitude divider retains a 36-bit remainder and uses a
