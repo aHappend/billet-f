@@ -87,6 +87,11 @@ def nlms_vectors(path, taps, seed, full=True):
         append(rng.randint(-32768, 32767), rng.randint(-32768, 32767),
                "disabled", enabled=False)
     metrics["disabled"] = {"samples": 64}
+    # Re-enable without reset so illegal disabled-state weight updates affect public audio.
+    for i in range(64):
+        far = rng.randint(-4000, 4000)
+        append(rne(far, 1), far, "disabled-resume", enabled=True)
+    metrics["disabled-resume"] = {"samples": 64}
     path.write_text(str(len(rows)) + "\n" + "".join(rows))
     return len(rows), metrics
 

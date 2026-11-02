@@ -24,6 +24,7 @@ def compile_tb(evidence, top, parameters=None, simulator="verilator", source_roo
     else:
         binary = work / ("V" + top)
         argv = ["verilator", "--binary", "--timing", "--assert",
+                "--unroll-count", "256",
                 "-Wno-fatal", "-Itests", "--top-module", top, "--Mdir",
                 evidence.relative(work), "-j", "2"]
         argv += [f"-G{k}={v}" for k, v in (parameters or {}).items()]
